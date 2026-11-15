@@ -55,6 +55,36 @@ cat feeds.conf
 endg
 
 # ---------------------------------------------------------------
+# 2.5) luci-app-airoha-npu（rchen14b 版 v1.0.1）
+#      NPU 监控 + CPU 频率控制 + PLL 超频（500-1600MHz 直写寄存器）
+#      支持 AN7581/AN7583 双 SoC 检测，拷入 package/ 覆盖 feed 同名包
+# ---------------------------------------------------------------
+group "引入 luci-app-airoha-npu (NPU 监控 / CPU 超频)"
+NPU_DIR="$SRC/package/luci-app-airoha-npu"
+if [ ! -f "$NPU_DIR/Makefile" ]; then
+  rm -rf /tmp/airoha-npu-src
+  git clone --depth 1 https://github.com/rchen14b/luci-app-airoha-npu.git /tmp/airoha-npu-src
+  mkdir -p "$NPU_DIR"
+  cp -a /tmp/airoha-npu-src/. "$NPU_DIR/"
+  rm -rf /tmp/airoha-npu-src
+fi
+grep -q 'LUCI_TITLE:=LuCI Airoha SoC Status' "$NPU_DIR/Makefile" || {
+  echo "::error::luci-app-airoha-npu 源码不完整"
+  exit 1
+}
+# 确认后端带超频实现（AIROHA_OC_MAX_MHZ 上限配置 + devmem PLL 写入）
+grep -q 'AIROHA_OC_MAX_MHZ' "$NPU_DIR/root/usr/libexec/rpcd/luci.airoha_npu" || {
+  echo "::error::该版本不含 CPU 超频实现（AIROHA_OC_MAX_MHZ），请检查仓库"
+  exit 1
+}
+grep -q 'devmem' "$NPU_DIR/root/usr/libexec/rpcd/luci.airoha_npu" || {
+  echo "::error::该版本后端缺 devmem 超频路径，请检查仓库"
+  exit 1
+}
+echo "luci-app-airoha-npu rchen14b 版就绪（含超频）"
+endg
+
+# ---------------------------------------------------------------
 # 3) 机型定制（OpenWrt files/ overlay，直接编进 rootfs）
 #    个人精简版只保留：概览页读数脚本 / root 密码 / LAN IP / 简体中文。
 #    不注入 RPS、代理调优、dnsmasq 缓存、主题切换等任何调优。
@@ -205,12 +235,15 @@ fi
 # 6) 严格校验：个人精简版正反向双向校验
 # ---------------------------------------------------------------
 group "校验个人精简版包集合"
-# 正向：必须全部入选（QModem 全家 + OpenClash + USB 驱动 + PON 基础 + 中文）
+# 正向：必须全部入选（QModem 全家 + OpenClash + USB 驱动 + PON 基础 + 中文
+#       + NPU/超频界面 + 短信转发）
 for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
          qmodem qfirehose \
          luci-app-qmodem luci-app-qmodem-next luci-app-qmodem-monitor \
          luci-app-qmodem-sms luci-app-qmodem-mwan luci-app-qmodem-ttl \
          luci-app-qmodem-ttlfw4 \
+         sms-forwarder sms-forwarder-next \
+         luci-app-airoha-npu \
          luci-app-openclash luci-i18n-base-zh-cn \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx; do
@@ -219,11 +252,18 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
     exit 1
   fi
 done
+# 超频依赖：busybox devmem applet 与内核 /dev/mem 必须开启
+for c in CONFIG_BUSYBOX_CONFIG_DEVMEM CONFIG_KERNEL_DEVMEM; do
+  if ! grep -q "^${c}=y$" .config; then
+    echo "::error::缺少 ${c}，CPU 超频功能不可用"
+    exit 1
+  fi
+done
 # 反向：确认精简目标确实不在固件里
 for p in luci-theme-aurora luci-app-aurora-config luci-theme-argon luci-theme-vantage \
          luci-app-vantage luci-app-passwall xray-core \
          kmod-crypto-hw-eip93 kmod-cryptodev kmod-tcp-bbr \
-         luci-app-cpufreq luci-app-airoha-npu autocore; do
+         luci-app-cpufreq autocore; do
   if grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人精简版不应包含 ${p}"
     exit 1
@@ -234,5 +274,5 @@ if ! grep -q "^CONFIG_LUCI_LANG_zh_Hans=y$" .config; then
   echo "::error::缺少 CONFIG_LUCI_LANG_zh_Hans，中文翻译包不会生效"
   exit 1
 fi
-echo "个人精简版包校验通过（QModem 全功能 v3.2.0 + OpenClash 无内核 + USB 驱动）"
+echo "个人精简版包校验通过（QModem 全功能 v3.2.0 + 短信转发 + OpenClash 无内核 + USB 驱动 + NPU/超频）"
 endg
