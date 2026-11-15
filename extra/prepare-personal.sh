@@ -123,13 +123,14 @@ UCIBATCH
 exit 0
 LANIP
 
-# 3.4 默认简体中文（主题保持官方默认 bootstrap，不做任何切换）
-cat > "$OVL/etc/uci-defaults/99-lang" <<'LANG'
+# 3.4 默认简体中文 + 默认主题 Argon（99- 前缀保证开机最后执行覆盖）
+cat > "$OVL/etc/uci-defaults/99-lang-theme" <<'LANGTHEME'
 #!/bin/sh
 uci -q set luci.main.lang='zh_cn'
+uci -q set luci.main.mediaurlbase='/luci-static/argon'
 uci -q commit luci
 exit 0
-LANG
+LANGTHEME
 chmod +x "$OVL/etc/uci-defaults/"*
 endg
 
@@ -244,7 +245,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          luci-app-qmodem-ttlfw4 \
          sms-forwarder sms-forwarder-next \
          luci-app-airoha-npu \
-         luci-app-openclash luci-i18n-base-zh-cn \
+         luci-app-openclash luci-i18n-base-zh-cn luci-theme-argon \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
@@ -260,7 +261,7 @@ for c in CONFIG_BUSYBOX_CONFIG_DEVMEM CONFIG_KERNEL_DEVMEM; do
   fi
 done
 # 反向：确认精简目标确实不在固件里
-for p in luci-theme-aurora luci-app-aurora-config luci-theme-argon luci-theme-vantage \
+for p in luci-theme-aurora luci-app-aurora-config luci-theme-vantage \
          luci-app-vantage luci-app-passwall xray-core \
          kmod-crypto-hw-eip93 kmod-cryptodev kmod-tcp-bbr \
          luci-app-cpufreq autocore; do
