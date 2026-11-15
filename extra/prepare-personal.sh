@@ -253,8 +253,8 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
     exit 1
   fi
 done
-# 超频依赖：busybox devmem applet 与内核 /dev/mem 必须开启
-for c in CONFIG_BUSYBOX_CONFIG_DEVMEM CONFIG_KERNEL_DEVMEM; do
+# 超频依赖：busybox CUSTOM 开关 + devmem applet + 内核 /dev/mem 全部必须开启
+for c in CONFIG_BUSYBOX_CUSTOM CONFIG_BUSYBOX_CONFIG_DEVMEM CONFIG_KERNEL_DEVMEM; do
   if ! grep -q "^${c}=y$" .config; then
     echo "::error::缺少 ${c}，CPU 超频功能不可用"
     exit 1
