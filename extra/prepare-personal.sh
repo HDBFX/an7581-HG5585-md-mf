@@ -240,10 +240,10 @@ group "校验个人精简版包集合"
 #       + NPU/超频界面 + 短信转发）
 for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
          qmodem qfirehose \
-         luci-app-qmodem luci-app-qmodem-next luci-app-qmodem-monitor \
-         luci-app-qmodem-sms luci-app-qmodem-mwan luci-app-qmodem-ttl \
+         luci-app-qmodem luci-app-qmodem-monitor \
+         luci-app-qmodem-sms luci-app-qmodem-mwan \
          luci-app-qmodem-ttlfw4 \
-         sms-forwarder sms-forwarder-next \
+         sms-forwarder-next \
          luci-app-airoha-npu \
          luci-app-openclash luci-i18n-base-zh-cn luci-theme-argon \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
@@ -264,7 +264,8 @@ done
 for p in luci-theme-aurora luci-app-aurora-config luci-theme-vantage \
          luci-app-vantage luci-app-passwall xray-core \
          kmod-crypto-hw-eip93 kmod-cryptodev kmod-tcp-bbr \
-         luci-app-cpufreq autocore; do
+         luci-app-cpufreq autocore \
+         luci-app-qmodem-next luci-app-qmodem-ttl sms-forwarder; do
   if grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人精简版不应包含 ${p}"
     exit 1
