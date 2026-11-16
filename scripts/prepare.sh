@@ -361,7 +361,7 @@ grep -E "^CONFIG_TARGET_PROFILE=" .config || true
 # 关闭设备独立 bootloader / ATF / 外部交叉工具链包。
 # 这些包产出的是单独烧录的 bootloader artifact，不属于 sysupgrade 固件；
 # 且其源码托管在自托管 GitLab（arm / u-boot 域），CI 环境不稳定。
-# 依据 an7581.mk：两机型 IMAGES 均为 sysupgrade.itb，不依赖这些包。
+# 依据各设备 image 定义：本工作流仅需要 sysupgrade 固件，不依赖独立 bootloader artifacts。
 KEYS="$(grep -E '^CONFIG_PACKAGE_(u-boot-|trusted-firmware-a-|arm-gnu-toolchain)[^=]*=y$' .config | sed 's/=y$//' || true)"
 for k in $KEYS; do
   sed -i "s|^${k}=y|# ${k} is not set|" .config
@@ -373,47 +373,7 @@ done
 if [ "$SUBTARGET" = "an7583" ]; then
   MK="target/linux/airoha/image/an7583.mk"
   [ -f "$MK" ] || { echo "::error::缺少 AN7583 image 定义: $MK"; exit 1; }
-  grep -q '^define Device/nokia_xg-040g-mf-ubifor p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
-         luci-app-airoha-npu luci-app-qmodem-next qmodem luci-app-openclash \
-         luci-app-ssr-plus xray-core luci-app-cpufreq \
-         luci-theme-aurora luci-app-aurora-config luci-i18n-base-zh-cn \
-         usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
-         kmod-usb-serial-sierrawireless kmod-mtk-t7xx \
-         autocore kmod-crypto-hw-eip93 kmod-cryptodev openssl-util \
-         libopenssl-devcrypto kmod-tcp-bbr ${EXTRA_REQUIRED_PKGS:-}; do
-  if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
-    echo "::error::配置缺少 ${p}"
-    exit 1
-  fi
-done
-# QFirehose is mandatory for HG5585F CT only; fail early if feeds/defconfig drop it.
-if [[ "$MODEL" == "hg5585f-ct" ]]; then
-  grep -Fq "CONFIG_PACKAGE_qmodem_INCLUDE_ADD_QFIREHOSE_SUPPORT=y" .config || {
-    echo "::error::HG5585F CT 缺少 QModem QFirehose 支持开关"
-    exit 1
-  }
-  grep -Fq "CONFIG_PACKAGE_qfirehose=y" .config || {
-    echo "::error::HG5585F CT 缺少 qfirehose 包"
-    exit 1
-  }
-fi
-# 反向校验：Passwall 已移除，若 feeds 解析后被连带选中（依赖残留）则立即失败，
-# 避免 opkg 安装阶段才暴露文件冲突
-if grep -Eq '^CONFIG_PACKAGE_luci-app-passwall=y$|^CONFIG_PACKAGE_luci-app-passwall=' .config; then
-  echo "::error::luci-app-passwall 不应被选中（已由 ssr-plus 取代）"
-  grep -E '^CONFIG_PACKAGE_.*passwall' .config || true
-  exit 1
-fi
-# 语言开关是 HIDDEN 中文包能否被选中的前提，必须存在
-if ! grep -q "^CONFIG_LUCI_LANG_zh_Hans=y$" .config; then
-  echo "::error::缺少 CONFIG_LUCI_LANG_zh_Hans，中文翻译包不会生效"
-  exit 1
-fi
-echo "关键包校验通过（含中文 / Aurora 主题）"
-grep -E '^CONFIG_TARGET_(BOARD|SUBTARGET|PROFILE)' .config
-endg
-
- "$MK" || {
+  grep -q '^define Device/nokia_xg-040g-mf-ubi$' "$MK" || {
     echo "::error::上游未找到 XG-040G-MF UBI profile，停止构建"
     exit 1
   }
