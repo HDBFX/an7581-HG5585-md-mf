@@ -144,6 +144,16 @@ uci -q set dhcp.@dnsmasq[0].cachesize='2000'
 uci -q commit dhcp
 DNSCACHE
 
+# QModem v3.2.0 rpcd 加载链修复：rpcd 漏加载 cmds/<vendor>.sh 导致概览页
+# 缺型号/制造商/固件版本/温度/电压。幂等：已修复或 main 分支新架构自动跳过。
+cat > "$OVL/etc/uci-defaults/95-qmodem-rpcd-cmds" <<'RPCDFIX'
+RPCD=/usr/libexec/rpcd/qmodem
+if [ -f "$RPCD" ] && ! grep -qF 'cmds/${vendor}.sh' "$RPCD"; then
+	sed -i 's|^\([[:space:]]*\)\. /usr/share/qmodem/modem_util.sh$|\1. /usr/share/qmodem/modem_util.sh\n\1[ -n "$vendor" ] \&\& [ -f "/usr/share/qmodem/cmds/${vendor}.sh" ] \&\& . "/usr/share/qmodem/cmds/${vendor}.sh"|' "$RPCD"
+fi
+exit 0
+RPCDFIX
+
 # 2.5G 口并入 LAN 桥：md/mf 的 2.5G RJ45 是独立 GMAC（gdm4），netdev 名 lan1
 # （EN8811H 2500base-x）。上游兜底配置只桥 eth0，lan1 不在任何接口 → 不通。
 # 仅当系统存在 lan1（即 md/mf）时追加；hg5585f 无 lan1 自动跳过。

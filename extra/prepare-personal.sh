@@ -140,6 +140,17 @@ uci commit network
 exit 0
 LAN25G
 
+# 3.35 QModem v3.2.0 rpcd 加载链修复：rpcd 分发脚本漏加载 cmds/<vendor>.sh，
+#     quectel 专属 cmd_*（型号/制造商/固件版本/温度/电压）函数不存在 →
+#     概览页 base_info 只剩 AT端口/连接状态。幂等补丁：已含加载行自动跳过。
+cat > "$OVL/etc/uci-defaults/95-qmodem-rpcd-cmds" <<'RPCDFIX'
+RPCD=/usr/libexec/rpcd/qmodem
+if [ -f "$RPCD" ] && ! grep -qF 'cmds/${vendor}.sh' "$RPCD"; then
+	sed -i 's|^\([[:space:]]*\)\. /usr/share/qmodem/modem_util.sh$|\1. /usr/share/qmodem/modem_util.sh\n\1[ -n "$vendor" ] \&\& [ -f "/usr/share/qmodem/cmds/${vendor}.sh" ] \&\& . "/usr/share/qmodem/cmds/${vendor}.sh"|' "$RPCD"
+fi
+exit 0
+RPCDFIX
+
 # 3.4 默认简体中文 + 默认主题 Argon（99- 前缀保证开机最后执行覆盖）
 cat > "$OVL/etc/uci-defaults/99-lang-theme" <<'LANGTHEME'
 #!/bin/sh

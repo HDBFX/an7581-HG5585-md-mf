@@ -169,6 +169,18 @@ uci commit network
 exit 0
 LAN25G
 
+# 3.66 QModem v3.2.0 rpcd 加载链修复：rpcd 分发脚本漏加载 cmds/<vendor>.sh，
+#     quectel 专属 cmd_*（型号/制造商/固件版本/温度/电压）函数不存在 →
+#     概览页 base_info 只剩 AT端口/连接状态。幂等补丁：已含加载行或 main
+#     分支新架构（无 modem_util 引用）自动跳过。
+cat > "$OVL/etc/uci-defaults/95-qmodem-rpcd-cmds" <<'RPCDFIX'
+RPCD=/usr/libexec/rpcd/qmodem
+if [ -f "$RPCD" ] && ! grep -qF 'cmds/${vendor}.sh' "$RPCD"; then
+	sed -i 's|^\([[:space:]]*\)\. /usr/share/qmodem/modem_util.sh$|\1. /usr/share/qmodem/modem_util.sh\n\1[ -n "$vendor" ] \&\& [ -f "/usr/share/qmodem/cmds/${vendor}.sh" ] \&\& . "/usr/share/qmodem/cmds/${vendor}.sh"|' "$RPCD"
+fi
+exit 0
+RPCDFIX
+
 # 3.6 代理转发调优：TCP 缓冲扩容 + conntrack 上限 + dnsmasq 缓存。
 #     OpenClash/SSR-Plus 向代理服务器发起的出站连接是本机 TCP，BBR 配合大缓冲
 #     才能撑满高延迟大带宽链路（200ms RTT x 300Mbps 约 7.5MB 窗口，默认上限不够）；
