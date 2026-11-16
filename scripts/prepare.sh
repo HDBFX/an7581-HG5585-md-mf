@@ -5,12 +5,22 @@ set -euo pipefail
 
 MODEL="${1:?缺少机型名}"
 PROFILE="${2:?缺少 target profile}"
+SUBTARGET="${3:-an7581}"
 MIHOMO_VERSION="${MIHOMO_VERSION:-v1.19.33}"
 
 REPO="${GITHUB_WORKSPACE:?缺少 GITHUB_WORKSPACE}"
 SRC="$REPO/ponwrt"
 # 默认用正式版种子；测试构建可用 SEED_FILE 指向另一份 .config 种子
 SEED="${SEED_FILE:-$REPO/config/seed.config}"
+
+case "$SUBTARGET" in
+  an7581|an7583) ;;
+  *) echo "::error::不支持的 Airoha 子目标: ${SUBTARGET}"; exit 1 ;;
+esac
+case "$MODEL:$SUBTARGET" in
+  hg5585f-ct:an7581|hg5585f-cu:an7581|xg-040g-md:an7581|xg-040g-mf:an7583) ;;
+  *) echo "::error::机型与 Airoha 子目标不匹配: ${MODEL} / ${SUBTARGET}"; exit 1 ;;
+esac
 
 group(){ echo "::group::$*"; }
 endg(){ echo "::endgroup::"; }
@@ -141,7 +151,7 @@ exit 0
 RPS
 chmod +x "$OVL/etc/hotplug.d/net/20-rps"
 
-# 3.7 2.5G 口并入 LAN 桥：XG-040G md/mf 的 2.5G RJ45 是独立 GMAC（gdm4），
+# 3.65 2.5G 口并入 LAN 桥：XG-040G md/mf 的 2.5G RJ45 是独立 GMAC（gdm4），
 #     netdev 名为 lan1（EN8811H 2500base-x）。上游 99-default_network 只把
 #     eth0（gsw 交换的 1G 口）桥进 br-lan，lan1 未进任何接口 → 有驱动但不通。
 #     仅当系统存在 lan1 netdev（即 md/mf）时追加；hg5585f 无 lan1 自动跳过。
@@ -312,7 +322,7 @@ endg
 # ---------------------------------------------------------------
 # 6) .config
 # ---------------------------------------------------------------
-group "生成 .config ($PROFILE)"
+group "生成 .config ($SUBTARGET / $PROFILE)"
 # ccache 选项默认带可见性条件（bool "Use ccache" if DEVEL），DEVEL 未开时
 # kconfig 视为不可见符号，defconfig 会把它重置回默认值 n，种子里写 y 也无效。
 # 这里去掉该条件，让 CONFIG_CCACHE=y 真正生效；不影响其他开发选项。
@@ -327,8 +337,13 @@ grep -q 'bool "Use ccache"$' config/Config-devel.in || {
 # 选中后 CONFIG_TARGET_PROFILE 会自动 default 成 "DEVICE_<dev>"，
 # 设备的 DEVICE_PACKAGES（WiFi 驱动、fitblk 等）也随之进入 rootfs。
 {
+  echo "CONFIG_TARGET_airoha=y"
+  echo "CONFIG_TARGET_airoha_${SUBTARGET}=y"
+  echo 'CONFIG_TARGET_BOARD="airoha"'
+  echo "CONFIG_TARGET_SUBTARGET=\"${SUBTARGET}\""
+  echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y"
   cat "$SEED"
-  echo "CONFIG_TARGET_airoha_an7581_DEVICE_${PROFILE}=y"
+  echo "CONFIG_TARGET_airoha_${SUBTARGET}_DEVICE_${PROFILE}=y"
 } > .config
 
 
@@ -350,8 +365,8 @@ else
 fi
 
 # 断言机型设备符号确实被选中，避免编错设备白跑几小时
-if ! grep -q "^CONFIG_TARGET_airoha_an7581_DEVICE_${PROFILE}=y$" .config; then
-  echo "::error::机型设备未选中: ${PROFILE}"
+if ! grep -q "^CONFIG_TARGET_airoha_${SUBTARGET}_DEVICE_${PROFILE}=y$" .config; then
+  echo "::error::机型设备未选中: ${SUBTARGET} / ${PROFILE}"
   echo "--- .config 中实际选中的设备符号 ---"
   grep -E "^CONFIG_TARGET_.*_DEVICE_.*=y$" .config | head -20 || true
   echo "--- 含 ${PROFILE} 的所有行 ---"
@@ -364,11 +379,29 @@ grep -E "^CONFIG_TARGET_PROFILE=" .config || true
 # 关闭设备独立 bootloader / ATF / 外部交叉工具链包。
 # 这些包产出的是单独烧录的 bootloader artifact，不属于 sysupgrade 固件；
 # 且其源码托管在自托管 GitLab（arm / u-boot 域），CI 环境不稳定。
-# 依据 an7581.mk：两机型 IMAGES 均为 sysupgrade.itb，不依赖这些包。
+# 依据各设备 image 定义：本工作流仅需要 sysupgrade 固件，不依赖独立 bootloader artifacts。
 KEYS="$(grep -E '^CONFIG_PACKAGE_(u-boot-|trusted-firmware-a-|arm-gnu-toolchain)[^=]*=y$' .config | sed 's/=y$//' || true)"
 for k in $KEYS; do
   sed -i "s|^${k}=y|# ${k} is not set|" .config
 done
+
+# AN7583 的 XG-040G-MF UBI 设备还声明了首次烧录用 BL31/U-Boot 独立产物。
+# 本工作流只发布 sysupgrade.itb，且上面已关闭对应 bootloader/ATF 包；
+# 移除该临时源码树中的独立 ARTIFACT 规则，避免无关的 fiptool 产物步骤失败。
+if [ "$SUBTARGET" = "an7583" ]; then
+  MK="target/linux/airoha/image/an7583.mk"
+  [ -f "$MK" ] || { echo "::error::缺少 AN7583 image 定义: $MK"; exit 1; }
+  grep -q '^define Device/nokia_xg-040g-mf-ubi$' "$MK" || {
+    echo "::error::上游未找到 XG-040G-MF UBI profile，停止构建"
+    exit 1
+  }
+  sed -i -E '/^[[:space:]]*ARTIFACT/d' "$MK"
+  if grep -qE '^[[:space:]]*ARTIFACT' "$MK"; then
+    echo "::error::AN7583 独立 ARTIFACT 规则未能全部移除"
+    exit 1
+  fi
+  echo "AN7583: 已保留 sysupgrade.itb，跳过独立 bootloader artifacts"
+fi
 
 # 严格校验：用户要求的包必须全部入选
 for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
