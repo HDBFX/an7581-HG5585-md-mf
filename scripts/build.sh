@@ -4,8 +4,14 @@ set -euo pipefail
 
 MODEL="${1:?缺少机型名}"
 PROFILE="${2:?缺少 target profile}"
+SUBTARGET="${3:-an7581}"
+case "$SUBTARGET" in
+  an7581|an7583) ;;
+  *) echo "::error::不支持的 Airoha 子目标: ${SUBTARGET}"; exit 1 ;;
+esac
 REPO="${GITHUB_WORKSPACE:?缺少 GITHUB_WORKSPACE}"
 SRC="$REPO/ponwrt"
+BIN="bin/targets/airoha/${SUBTARGET}"
 cd "$SRC"
 
 group(){ echo "::group::$*"; }
@@ -16,7 +22,7 @@ group "下载源码包"
 make -j"$(nproc)" download || make -j1 download
 endg
 
-group "编译固件 ($MODEL)"
+group "编译固件 ($MODEL / $SUBTARGET)"
 set +e
 make -j"$(nproc)" V=s > "$REPO/build-${MODEL}.log" 2>&1
 RC=$?
@@ -35,12 +41,12 @@ endg
 group "收集产物并按规则重命名"
 OUT="$REPO/output/$MODEL"
 mkdir -p "$OUT"
-find bin/targets/airoha/an7581 -maxdepth 1 -type f \
+find "$BIN" -maxdepth 1 -type f \
   \( -name "*${PROFILE}*sysupgrade*" -o -name "*${PROFILE}*squashfs*" \) \
   -exec cp -v {} "$OUT/" \;
 # 兜底：若 profile 名未出现在文件名里，收集该机型全部 sysupgrade 固件
 if [ -z "$(ls -A "$OUT")" ]; then
-  find bin/targets/airoha/an7581 -maxdepth 1 -type f \
+  find "$BIN" -maxdepth 1 -type f \
     -name "*sysupgrade*" -exec cp -v {} "$OUT/" \;
 fi
 if [ -z "$(ls -A "$OUT")" ]; then
@@ -65,6 +71,7 @@ echo "固件名: ${FWNAME}.itb"
   echo "固件名:   ${FWNAME}.itb"
   echo "机型:     $MODEL"
   echo "Profile:  $PROFILE"
+  echo "子目标:   airoha/$SUBTARGET"
   echo "原始产物: $(basename "$MAIN")"
   echo "源码:     $(git -C "$SRC" log -1 --format='pbs05/ponwrt %h %cd' --date=short 2>/dev/null || echo pbs05/ponwrt)"
   echo "构建:     GitHub Actions run ${GITHUB_RUN_NUMBER:-local}"

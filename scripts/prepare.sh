@@ -5,12 +5,22 @@ set -euo pipefail
 
 MODEL="${1:?缺少机型名}"
 PROFILE="${2:?缺少 target profile}"
+SUBTARGET="${3:-an7581}"
 MIHOMO_VERSION="${MIHOMO_VERSION:-v1.19.33}"
 
 REPO="${GITHUB_WORKSPACE:?缺少 GITHUB_WORKSPACE}"
 SRC="$REPO/ponwrt"
 # 默认用正式版种子；测试构建可用 SEED_FILE 指向另一份 .config 种子
 SEED="${SEED_FILE:-$REPO/config/seed.config}"
+
+case "$SUBTARGET" in
+  an7581|an7583) ;;
+  *) echo "::error::不支持的 Airoha 子目标: ${SUBTARGET}"; exit 1 ;;
+esac
+case "$MODEL:$SUBTARGET" in
+  hg5585f-ct:an7581|hg5585f-cu:an7581|xg-040g-md:an7581|xg-040g-mf:an7583) ;;
+  *) echo "::error::机型与 Airoha 子目标不匹配: ${MODEL} / ${SUBTARGET}"; exit 1 ;;
+esac
 
 group(){ echo "::group::$*"; }
 endg(){ echo "::endgroup::"; }
@@ -294,7 +304,7 @@ endg
 # ---------------------------------------------------------------
 # 6) .config
 # ---------------------------------------------------------------
-group "生成 .config ($PROFILE)"
+group "生成 .config ($SUBTARGET / $PROFILE)"
 # ccache 选项默认带可见性条件（bool "Use ccache" if DEVEL），DEVEL 未开时
 # kconfig 视为不可见符号，defconfig 会把它重置回默认值 n，种子里写 y 也无效。
 # 这里去掉该条件，让 CONFIG_CCACHE=y 真正生效；不影响其他开发选项。
@@ -309,8 +319,13 @@ grep -q 'bool "Use ccache"$' config/Config-devel.in || {
 # 选中后 CONFIG_TARGET_PROFILE 会自动 default 成 "DEVICE_<dev>"，
 # 设备的 DEVICE_PACKAGES（WiFi 驱动、fitblk 等）也随之进入 rootfs。
 {
+  echo "CONFIG_TARGET_airoha=y"
+  echo "CONFIG_TARGET_airoha_${SUBTARGET}=y"
+  echo 'CONFIG_TARGET_BOARD="airoha"'
+  echo "CONFIG_TARGET_SUBTARGET=\"${SUBTARGET}\""
+  echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y"
   cat "$SEED"
-  echo "CONFIG_TARGET_airoha_an7581_DEVICE_${PROFILE}=y"
+  echo "CONFIG_TARGET_airoha_${SUBTARGET}_DEVICE_${PROFILE}=y"
 } > .config
 
 
@@ -332,8 +347,8 @@ else
 fi
 
 # 断言机型设备符号确实被选中，避免编错设备白跑几小时
-if ! grep -q "^CONFIG_TARGET_airoha_an7581_DEVICE_${PROFILE}=y$" .config; then
-  echo "::error::机型设备未选中: ${PROFILE}"
+if ! grep -q "^CONFIG_TARGET_airoha_${SUBTARGET}_DEVICE_${PROFILE}=y$" .config; then
+  echo "::error::机型设备未选中: ${SUBTARGET} / ${PROFILE}"
   echo "--- .config 中实际选中的设备符号 ---"
   grep -E "^CONFIG_TARGET_.*_DEVICE_.*=y$" .config | head -20 || true
   echo "--- 含 ${PROFILE} 的所有行 ---"
@@ -351,6 +366,64 @@ KEYS="$(grep -E '^CONFIG_PACKAGE_(u-boot-|trusted-firmware-a-|arm-gnu-toolchain)
 for k in $KEYS; do
   sed -i "s|^${k}=y|# ${k} is not set|" .config
 done
+
+# AN7583 的 XG-040G-MF UBI 设备还声明了首次烧录用 BL31/U-Boot 独立产物。
+# 本工作流只发布 sysupgrade.itb，且上面已关闭对应 bootloader/ATF 包；
+# 移除该临时源码树中的独立 ARTIFACT 规则，避免无关的 fiptool 产物步骤失败。
+if [ "$SUBTARGET" = "an7583" ]; then
+  MK="target/linux/airoha/image/an7583.mk"
+  [ -f "$MK" ] || { echo "::error::缺少 AN7583 image 定义: $MK"; exit 1; }
+  grep -q '^define Device/nokia_xg-040g-mf-ubifor p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
+         luci-app-airoha-npu luci-app-qmodem-next qmodem luci-app-openclash \
+         luci-app-ssr-plus xray-core luci-app-cpufreq \
+         luci-theme-aurora luci-app-aurora-config luci-i18n-base-zh-cn \
+         usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
+         kmod-usb-serial-sierrawireless kmod-mtk-t7xx \
+         autocore kmod-crypto-hw-eip93 kmod-cryptodev openssl-util \
+         libopenssl-devcrypto kmod-tcp-bbr ${EXTRA_REQUIRED_PKGS:-}; do
+  if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
+    echo "::error::配置缺少 ${p}"
+    exit 1
+  fi
+done
+# QFirehose is mandatory for HG5585F CT only; fail early if feeds/defconfig drop it.
+if [[ "$MODEL" == "hg5585f-ct" ]]; then
+  grep -Fq "CONFIG_PACKAGE_qmodem_INCLUDE_ADD_QFIREHOSE_SUPPORT=y" .config || {
+    echo "::error::HG5585F CT 缺少 QModem QFirehose 支持开关"
+    exit 1
+  }
+  grep -Fq "CONFIG_PACKAGE_qfirehose=y" .config || {
+    echo "::error::HG5585F CT 缺少 qfirehose 包"
+    exit 1
+  }
+fi
+# 反向校验：Passwall 已移除，若 feeds 解析后被连带选中（依赖残留）则立即失败，
+# 避免 opkg 安装阶段才暴露文件冲突
+if grep -Eq '^CONFIG_PACKAGE_luci-app-passwall=y$|^CONFIG_PACKAGE_luci-app-passwall=' .config; then
+  echo "::error::luci-app-passwall 不应被选中（已由 ssr-plus 取代）"
+  grep -E '^CONFIG_PACKAGE_.*passwall' .config || true
+  exit 1
+fi
+# 语言开关是 HIDDEN 中文包能否被选中的前提，必须存在
+if ! grep -q "^CONFIG_LUCI_LANG_zh_Hans=y$" .config; then
+  echo "::error::缺少 CONFIG_LUCI_LANG_zh_Hans，中文翻译包不会生效"
+  exit 1
+fi
+echo "关键包校验通过（含中文 / Aurora 主题）"
+grep -E '^CONFIG_TARGET_(BOARD|SUBTARGET|PROFILE)' .config
+endg
+
+ "$MK" || {
+    echo "::error::上游未找到 XG-040G-MF UBI profile，停止构建"
+    exit 1
+  }
+  sed -i -E '/^[[:space:]]*ARTIFACT/d' "$MK"
+  if grep -qE '^[[:space:]]*ARTIFACT' "$MK"; then
+    echo "::error::AN7583 独立 ARTIFACT 规则未能全部移除"
+    exit 1
+  fi
+  echo "AN7583: 已保留 sysupgrade.itb，跳过独立 bootloader artifacts"
+fi
 
 # 严格校验：用户要求的包必须全部入选
 for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \

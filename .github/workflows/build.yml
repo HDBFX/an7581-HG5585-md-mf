@@ -30,12 +30,16 @@ jobs:
         include:
           - model: hg5585f-ct
             profile: fiberhome_hg5585f-ct
+            subtarget: an7581
           - model: xg-040g-md
             profile: nokia_xg-040g-md-ubi
+            subtarget: an7581
           - model: hg5585f-cu
             profile: fiberhome_hg5585f-cu
+            subtarget: an7581
           - model: xg-040g-mf
             profile: nokia_xg-040g-mf-ubi
+            subtarget: an7583
     env:
       FORCE_UNSAFE_CONFIGURE: "1"
     steps:
@@ -95,10 +99,10 @@ jobs:
           ccache -s 2>/dev/null | head -10 || true
 
       - name: 准备源码 / feeds / 定制 / 配置
-        run: bash scripts/prepare.sh "${{ matrix.model }}" "${{ matrix.profile }}"
+        run: bash scripts/prepare.sh "${{ matrix.model }}" "${{ matrix.profile }}" "${{ matrix.subtarget }}"
 
       - name: 下载并编译
-        run: bash scripts/build.sh "${{ matrix.model }}" "${{ matrix.profile }}"
+        run: bash scripts/build.sh "${{ matrix.model }}" "${{ matrix.profile }}" "${{ matrix.subtarget }}"
 
       - name: 上传固件
         uses: actions/upload-artifact@v4
@@ -124,7 +128,7 @@ jobs:
     if: ${{ needs.build.result == 'success' }}
     runs-on: ubuntu-24.04
     steps:
-      - name: 下载两个机型的固件
+      - name: 下载四个机型的固件
         uses: actions/download-artifact@v4
         with:
           pattern: firmware-*
