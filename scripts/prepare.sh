@@ -47,8 +47,10 @@ endg
 #    - ONU 插件用 naoki66/OpenWrt_ONU_CONFIG 取代 pbs05/openwrt-pon-userspace：
 #      两者都提供 airoha-ponctl / airoha-pon-daemons / airoha-pon-debug，
 #      同时启用会产生同名包冲突
-#    - luci-app-openclash / luci-app-passwall / luci-app-cpufreq 均由
-#      immortalwrt/luci feed 提供，无需额外 feed
+#    - luci-app-openclash / luci-app-cpufreq 由 immortalwrt/luci feed 提供
+#    - luci-app-ssr-plus 由 fw876/helloworld feed 提供，必须放在 feeds.conf
+#      末尾：它与 immortalwrt/packages 存在同名包（shadowsocks-libev、tcping 等），
+#      按 feeds.conf 顺序后装的覆盖先装的，SSR 协议支持依赖 helloworld 版本
 # ---------------------------------------------------------------
 group "写入 feeds.conf"
 cat > feeds.conf <<'FEEDS'
@@ -61,6 +63,7 @@ src-git pon_drivers https://github.com/pbs05/openwrt-pon-drivers.git
 src-git onu https://github.com/naoki66/OpenWrt_ONU_CONFIG.git;main
 src-git airoha https://github.com/naoki66/luci-app-airoha.git;main
 src-git qmodem https://github.com/FUjr/QModem.git;main
+src-git ssr https://github.com/fw876/helloworld.git
 FEEDS
 cat feeds.conf
 ./scripts/feeds update -a
@@ -139,7 +142,7 @@ RPS
 chmod +x "$OVL/etc/hotplug.d/net/20-rps"
 
 # 3.6 代理转发调优：TCP 缓冲扩容 + conntrack 上限 + dnsmasq 缓存。
-#     OpenClash/Passwall 向代理服务器发起的出站连接是本机 TCP，BBR 配合大缓冲
+#     OpenClash/SSR-Plus 向代理服务器发起的出站连接是本机 TCP，BBR 配合大缓冲
 #     才能撑满高延迟大带宽链路（200ms RTT x 300Mbps 约 7.5MB 窗口，默认上限不够）；
 #     conntrack 65536 应对 mihomo 大量 UDP/QUIC 短连接，避免表满丢连接。
 cat > "$OVL/etc/sysctl.d/91-proxy-tuning.conf" <<'PROXYTUNE'
@@ -352,7 +355,7 @@ done
 # 严格校验：用户要求的包必须全部入选
 for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
          luci-app-airoha-npu luci-app-qmodem-next qmodem luci-app-openclash \
-         luci-app-passwall luci-app-cpufreq xray-core \
+         luci-app-ssr-plus xray-core luci-app-cpufreq \
          luci-theme-aurora luci-app-aurora-config luci-i18n-base-zh-cn \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx \
@@ -373,6 +376,13 @@ if [[ "$MODEL" == "hg5585f-ct" ]]; then
     echo "::error::HG5585F CT 缺少 qfirehose 包"
     exit 1
   }
+fi
+# 反向校验：Passwall 已移除，若 feeds 解析后被连带选中（依赖残留）则立即失败，
+# 避免 opkg 安装阶段才暴露文件冲突
+if grep -Eq '^CONFIG_PACKAGE_luci-app-passwall=y$|^CONFIG_PACKAGE_luci-app-passwall=' .config; then
+  echo "::error::luci-app-passwall 不应被选中（已由 ssr-plus 取代）"
+  grep -E '^CONFIG_PACKAGE_.*passwall' .config || true
+  exit 1
 fi
 # 语言开关是 HIDDEN 中文包能否被选中的前提，必须存在
 if ! grep -q "^CONFIG_LUCI_LANG_zh_Hans=y$" .config; then

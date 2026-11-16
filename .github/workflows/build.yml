@@ -1,10 +1,10 @@
-name: 构建 an7581 双机型固件
+name: 构建 an7581 四机型固件
 
 # 推送到 main 自动开始构建；也可在 Actions 页面手动触发
 on:
   push:
     branches: [main]
-    # 只有配置/脚本变更才重跑 ct/md；新增独立工作流不会打断正在进行的构建
+    # 只有配置/脚本变更才重跑四机型；新增独立工作流不会打断正在进行的构建
     paths:
       - 'config/**'
       - 'scripts/**'
@@ -21,16 +21,21 @@ concurrency:
 jobs:
   build:
     name: ${{ matrix.model }}
-    runs-on: ubuntu-latest
+    # 锁定 24.04：26.04 镜像移除 ecj/fastjar/intltool，依赖安装阶段会失败
+    runs-on: ubuntu-24.04
     timeout-minutes: 360
     strategy:
-      fail-fast: false          # 一个机型失败不影响另一个继续产出
+      fail-fast: false          # 一个机型失败不影响其他继续产出
       matrix:
         include:
           - model: hg5585f-ct
             profile: fiberhome_hg5585f-ct
           - model: xg-040g-md
             profile: nokia_xg-040g-md-ubi
+          - model: hg5585f-cu
+            profile: fiberhome_hg5585f-cu
+          - model: xg-040g-mf
+            profile: nokia_xg-040g-mf-ubi
     env:
       FORCE_UNSAFE_CONFIGURE: "1"
     steps:
@@ -117,7 +122,7 @@ jobs:
     needs: build
     # 只有两个机型都编译成功才发布，避免失败时生成空 Release
     if: ${{ needs.build.result == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: 下载两个机型的固件
         uses: actions/download-artifact@v4
@@ -137,4 +142,4 @@ jobs:
           gh release create "$TAG" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "an7581 固件 ${GITHUB_RUN_NUMBER}" \
-            --notes "机型：hg5585f-ct / xg-040g-md（airoha/an7581）" || true
+            --notes "机型：hg5585f-ct / hg5585f-cu / xg-040g-md / xg-040g-mf（airoha/an7581）；代理：OpenClash + SSR-Plus" || true
