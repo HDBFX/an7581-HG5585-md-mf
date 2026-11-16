@@ -417,7 +417,7 @@ fi
 
 # 严格校验：用户要求的包必须全部入选
 for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
-         luci-app-airoha-npu luci-app-qmodem-next qmodem luci-app-openclash \
+         luci-app-airoha-npu luci-app-qmodem-next qmodem sms-forwarder-next luci-app-openclash \
          luci-app-ssr-plus xray-core luci-app-cpufreq \
          luci-theme-aurora luci-app-aurora-config luci-i18n-base-zh-cn \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
