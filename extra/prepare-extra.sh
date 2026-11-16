@@ -144,6 +144,23 @@ uci -q set dhcp.@dnsmasq[0].cachesize='2000'
 uci -q commit dhcp
 DNSCACHE
 
+# 2.5G 口并入 LAN 桥：md/mf 的 2.5G RJ45 是独立 GMAC（gdm4），netdev 名 lan1
+# （EN8811H 2500base-x）。上游兜底配置只桥 eth0，lan1 不在任何接口 → 不通。
+# 仅当系统存在 lan1（即 md/mf）时追加；hg5585f 无 lan1 自动跳过。
+cat > "$OVL/etc/uci-defaults/97-lan25g-bridge" <<'LAN25G'
+#!/bin/sh
+[ -e /sys/class/net/lan1 ] || exit 0
+for d in $(uci -q show network | sed -n 's/^network\.\([^.=]*\)=device$/\1/p'); do
+  [ "$(uci -q get network.$d.name)" = "br-lan" ] || continue
+  case " $(uci -q get network.$d.ports 2>/dev/null) " in
+    *" lan1 "*) ;;
+    *) uci add_list network.$d.ports='lan1' ;;
+  esac
+done
+uci commit network
+exit 0
+LAN25G
+
 # 3.1 登录密码 root
 ROOT_HASH="$(openssl passwd -1 -salt airoha root 2>/dev/null || true)"
 [ -n "$ROOT_HASH" ] || ROOT_HASH='$1$airoha$lzq0xSV6pJiFfzc/JwIoc0'

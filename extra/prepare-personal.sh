@@ -123,6 +123,23 @@ UCIBATCH
 exit 0
 LANIP
 
+# 2.5G 口并入 LAN 桥：md/mf 的 2.5G RJ45 是独立 GMAC（gdm4），netdev 名 lan1
+# （EN8811H 2500base-x）。上游兜底配置只桥 eth0，lan1 不在任何接口 → 不通。
+# 仅当系统存在 lan1（即 md/mf）时追加；hg5585f 无 lan1 自动跳过。
+cat > "$OVL/etc/uci-defaults/97-lan25g-bridge" <<'LAN25G'
+#!/bin/sh
+[ -e /sys/class/net/lan1 ] || exit 0
+for d in $(uci -q show network | sed -n 's/^network\.\([^.=]*\)=device$/\1/p'); do
+  [ "$(uci -q get network.$d.name)" = "br-lan" ] || continue
+  case " $(uci -q get network.$d.ports 2>/dev/null) " in
+    *" lan1 "*) ;;
+    *) uci add_list network.$d.ports='lan1' ;;
+  esac
+done
+uci commit network
+exit 0
+LAN25G
+
 # 3.4 默认简体中文 + 默认主题 Argon（99- 前缀保证开机最后执行覆盖）
 cat > "$OVL/etc/uci-defaults/99-lang-theme" <<'LANGTHEME'
 #!/bin/sh
