@@ -151,6 +151,36 @@ fi
 exit 0
 RPCDFIX
 
+# 94.3 短信转发自愈：LuCI 表单对"等于默认值"的选项保存时不写入 UCI
+#     （api_type 下拉框 default=webhook，界面显示着但配置里没有），
+#     转发器读不到 api_type 就静默跳过实例 → 配了也不转发。
+#     开机扫描：启用了但缺 api_type 的实例，按 api_config 特征自动补
+#     类型（已有类型的不动，幂等；未启用的示例实例不碰）。
+cat > "$OVL/etc/uci-defaults/94-smsf-apitype" <<'SMSF'
+#!/bin/sh
+[ -f /etc/config/sms_forwarder ] || exit 0
+i=0
+while uci -q get "sms_forwarder.@sms_forward_instance[$i]" >/dev/null 2>&1; do
+  s="sms_forwarder.@sms_forward_instance[$i]"
+  if [ "$(uci -q get "$s.enable")" = "1" ] && [ -z "$(uci -q get "$s.api_type")" ]; then
+    ac=$(uci -q get "$s.api_config")
+    t=""
+    case "$ac" in
+      *'"bot_token"'*)     t=tgbot ;;
+      *'"pushkey"'*)       t=pushdeer ;;
+      *'"recipient_uri"'*) t=sip ;;
+      *open.feishu.cn*)    t=feishu ;;
+      *'"token"'*)         t=serverchan ;;
+      *'"webhook_url"'*)   t=webhook ;;
+    esac
+    [ -n "$t" ] && uci set "$s.api_type=$t"
+  fi
+  i=$((i+1))
+done
+uci commit sms_forwarder
+exit 0
+SMSF
+
 # 3.4 默认简体中文 + 默认主题 Argon（99- 前缀保证开机最后执行覆盖）
 cat > "$OVL/etc/uci-defaults/99-lang-theme" <<'LANGTHEME'
 #!/bin/sh
