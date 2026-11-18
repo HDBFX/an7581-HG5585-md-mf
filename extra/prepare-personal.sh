@@ -115,6 +115,7 @@ SHADOW
 
 # 3.25 调优三件套（与正式版同款，体积近零）：BBR 由 kmod-tcp-bbr 包自带
 #     sysctl 落地；这里补 RPS 多核分发 + TCP/conntrack 代理调优 + DNS 缓存。
+mkdir -p "$OVL/etc/sysctl.d" "$OVL/etc/hotplug.d/net"
 cat > "$OVL/etc/sysctl.d/90-rps.conf" <<'SYSCTL'
 # RFS：全局 socket 流哈希表项数（每流 4096 由热插拔脚本分配）
 net.core.rps_sock_flow_entries = 32768
