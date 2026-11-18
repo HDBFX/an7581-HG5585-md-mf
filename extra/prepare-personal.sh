@@ -86,8 +86,9 @@ endg
 
 # ---------------------------------------------------------------
 # 3) 机型定制（OpenWrt files/ overlay，直接编进 rootfs）
-#    个人精简版只保留：概览页读数脚本 / root 密码 / LAN IP / 简体中文。
-#    不注入 RPS、代理调优、dnsmasq 缓存、主题切换等任何调优。
+#    个人精简版保留：概览页读数脚本 / root 密码 / LAN IP / 简体中文
+#    + 调优三件套（RPS 多核分发 / 代理调优 sysctl / dnsmasq 缓存，
+#      体积近零、无常驻进程，OpenClash 场景直接受益）。
 # ---------------------------------------------------------------
 group "注入机型定制 ($MODEL)"
 OVL="$SRC/files"
@@ -111,6 +112,47 @@ network:*:0:0:99999:7:::
 nobody:*:0:0:99999:7:::
 ntp:*:0:0:99999:7:::
 SHADOW
+
+# 3.25 调优三件套（与正式版同款，体积近零）：BBR 由 kmod-tcp-bbr 包自带
+#     sysctl 落地；这里补 RPS 多核分发 + TCP/conntrack 代理调优 + DNS 缓存。
+cat > "$OVL/etc/sysctl.d/90-rps.conf" <<'SYSCTL'
+# RFS：全局 socket 流哈希表项数（每流 4096 由热插拔脚本分配）
+net.core.rps_sock_flow_entries = 32768
+SYSCTL
+
+cat > "$OVL/etc/hotplug.d/net/20-rps" <<'RPS'
+#!/bin/sh
+# 网卡上线时把 RX 软中断分散到 CPU1-3（4 核取掩码 e，CPU0 留给硬中断）
+[ "$ACTION" = "add" ] || exit 0
+[ -n "$INTERFACE" ] || exit 0
+[ -d "/sys/class/net/$INTERFACE/queues" ] || exit 0
+case "$INTERFACE" in
+  lo|sit*|ip6tnl*|tun*|tap*|wg*|br-*|docker*|veth*) exit 0 ;;
+esac
+for q in /sys/class/net/"$INTERFACE"/queues/rx-*/rps_cpus; do
+  [ -w "$q" ] && echo e > "$q" 2>/dev/null
+done
+for q in /sys/class/net/"$INTERFACE"/queues/rx-*/rps_flow_cnt; do
+  [ -w "$q" ] && echo 4096 > "$q" 2>/dev/null
+done
+exit 0
+RPS
+chmod +x "$OVL/etc/hotplug.d/net/20-rps"
+
+cat > "$OVL/etc/sysctl.d/91-proxy-tuning.conf" <<'PROXYTUNE'
+# TCP/UDP 缓冲上限 16MB：tcp_rmem/wmem 第三列是内核自动调优上限
+net.core.rmem_max = 16777216
+net.core.wmem_max = 16777216
+net.ipv4.tcp_rmem = 4096 131072 16777216
+net.ipv4.tcp_wmem = 4096 65536 16777216
+# conntrack：代理 UDP/QUIC 海量短连接
+net.netfilter.nf_conntrack_max = 65536
+PROXYTUNE
+
+cat > "$OVL/etc/uci-defaults/98-dns-cache" <<'DNSCACHE'
+uci -q set dhcp.@dnsmasq[0].cachesize='2000'
+uci -q commit dhcp
+DNSCACHE
 
 # 3.3 登录 IP 192.168.2.1
 cat > "$OVL/etc/uci-defaults/99-lan-ip" <<'LANIP'
@@ -304,7 +346,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          luci-app-airoha-npu \
          luci-app-openclash luci-i18n-base-zh-cn luci-theme-argon \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
-         kmod-usb-serial-sierrawireless kmod-mtk-t7xx; do
+         kmod-usb-serial-sierrawireless kmod-mtk-t7xx kmod-tcp-bbr; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人精简版缺少 ${p}"
     exit 1
@@ -320,7 +362,7 @@ done
 # 反向：确认精简目标确实不在固件里
 for p in luci-theme-aurora luci-app-aurora-config luci-theme-vantage \
          luci-app-vantage luci-app-passwall xray-core \
-         kmod-crypto-hw-eip93 kmod-cryptodev kmod-tcp-bbr \
+         kmod-crypto-hw-eip93 kmod-cryptodev \
          luci-app-cpufreq autocore \
          luci-app-qmodem luci-app-qmodem-sms luci-app-qmodem-mwan \
          luci-app-qmodem-ttl sms-forwarder; do
