@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 个人精简版（xg-040g-md / xg-040g-mf）云端构建准备：
 # 全新克隆 pbs05/ponwrt；只装 QModem 全功能(v3.2.0) + OpenClash(不带内核)
-# + USB 4G/5G 驱动 + PON 基础栈；不含任何主题/其他代理/调优组件。
+# + SSR-Plus(Xray 核心+nftables 透明代理) + USB 4G/5G 驱动 + PON 基础栈
+# + 调优三件套；不含其他主题与 Passwall。
 # 由 .github/workflows/build-personal.yml 调用，运行在 GitHub-hosted runner 上。
 set -euo pipefail
 
@@ -48,6 +49,9 @@ src-git pon_drivers https://github.com/pbs05/openwrt-pon-drivers.git
 src-git onu https://github.com/naoki66/OpenWrt_ONU_CONFIG.git;main
 src-git airoha https://github.com/naoki66/luci-app-airoha.git;main
 src-git qmodem https://github.com/FUjr/QModem.git;v3.2.0
+# helloworld 必须放末尾：与 immortalwrt 同名包（shadowsocks-libev/tcping 等）
+# 后装的覆盖先装的，SSR-Plus 协议支持依赖 helloworld 版本
+src-git ssr https://github.com/fw876/helloworld.git
 FEEDS
 cat feeds.conf
 ./scripts/feeds update -a
@@ -345,7 +349,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          luci-app-qmodem-ttlfw4 \
          sms-forwarder-next \
          luci-app-airoha-npu \
-         luci-app-openclash luci-i18n-base-zh-cn luci-theme-argon \
+         luci-app-openclash luci-app-ssr-plus luci-i18n-base-zh-cn luci-theme-argon \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx kmod-tcp-bbr; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
@@ -362,7 +366,7 @@ for c in CONFIG_BUSYBOX_CUSTOM CONFIG_BUSYBOX_CONFIG_DEVMEM CONFIG_KERNEL_DEVMEM
 done
 # 反向：确认精简目标确实不在固件里
 for p in luci-theme-aurora luci-app-aurora-config luci-theme-vantage \
-         luci-app-vantage luci-app-passwall xray-core \
+         luci-app-vantage luci-app-passwall \
          kmod-crypto-hw-eip93 kmod-cryptodev \
          luci-app-cpufreq autocore \
          luci-app-qmodem luci-app-qmodem-sms luci-app-qmodem-mwan \
@@ -377,5 +381,5 @@ if ! grep -q "^CONFIG_LUCI_LANG_zh_Hans=y$" .config; then
   echo "::error::缺少 CONFIG_LUCI_LANG_zh_Hans，中文翻译包不会生效"
   exit 1
 fi
-echo "个人精简版包校验通过（QModem 全功能 v3.2.0 + 短信转发 + OpenClash 无内核 + USB 驱动 + NPU/超频）"
+echo "个人精简版包校验通过（QModem 全功能 v3.2.0 + 短信转发 + OpenClash 无内核 + SSR-Plus/Xray + USB 驱动 + NPU/超频）"
 endg
