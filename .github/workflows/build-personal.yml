@@ -141,5 +141,5 @@ jobs:
           TAG="fw-personal-$(date +%Y%m%d-%H%M%S)-${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" dist/* \
             --repo "$GITHUB_REPOSITORY" \
-            --title "个人精简版固件 ${GITHUB_RUN_NUMBER}" \
-            --notes "机型：xg-040g-md (airoha/an7581) / xg-040g-mf (airoha/an7583)；个人精简版：QModem 全功能 v3.2.0（主界面/新版界面/短信转发/监控/多WAN/TTL）+ OpenClash（仅插件、不带内核，需在插件内自行下载）+ USB 4G/5G 驱动 + PON 基础栈 + luci-app-airoha-npu（NPU 监控/CPU 频率控制/PLL 超频 500-1600MHz，1400MHz 以上为超频档注意稳定性）+ Argon 主题（默认）；不含 Passwall、EIP93/BBR/RPS/代理调优等组件；固件批次 P26。" || true
+            --title "个人版精简固件 $(date +%Y%m%d-%H%M)" \
+            --notes "机型：xg-040g-md (airoha/an7581) / xg-040g-mf (airoha/an7583)；个人精简版：QModem 全功能 v3.2.0（主界面/新版界面/短信转发/监控/多WAN/TTL）+ OpenClash（仅插件、不带内核，需在插件内自行下载）+ SSR-Plus（含 Xray 核心 + nftables 透明代理）+ USB 4G/5G 驱动 + PON 基础栈 + luci-app-airoha-npu（NPU 监控/CPU 频率控制/PLL 超频 500-1600MHz，1400MHz 以上为超频档注意稳定性）+ Argon 主题（默认）+ 调优三件套（BBR/RPS 多核分发/代理调优/DNS 缓存）+ htop；不含 Passwall；固件批次 P26。" || true
