@@ -159,6 +159,16 @@ uci -q set dhcp.@dnsmasq[0].cachesize='2000'
 uci -q commit dhcp
 DNSCACHE
 
+# 3.x FileBrowser 网页文件管理：开机启用，根目录指向 USB 挂载点 /mnt/
+# 访问 http://192.168.2.1:8989，首次账号 admin/admin（登录后请改密）
+cat > "$OVL/etc/uci-defaults/99-filebrowser" <<'FILEBROWSER'
+#!/bin/sh
+uci -q set filebrowser.config.enabled='1'
+uci -q set filebrowser.config.root_path='/mnt/'
+uci -q commit filebrowser
+exit 0
+FILEBROWSER
+
 # 3.3 登录 IP 192.168.2.1
 cat > "$OVL/etc/uci-defaults/99-lan-ip" <<'LANIP'
 #!/bin/sh
@@ -351,7 +361,8 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          luci-app-airoha-npu \
          luci-app-openclash luci-app-ssr-plus luci-i18n-base-zh-cn luci-theme-argon \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
-         kmod-usb-serial-sierrawireless kmod-mtk-t7xx kmod-tcp-bbr; do
+         kmod-usb-serial-sierrawireless kmod-mtk-t7xx kmod-tcp-bbr \
+         filebrowser; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人精简版缺少 ${p}"
     exit 1
