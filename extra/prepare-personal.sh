@@ -353,6 +353,27 @@ uci -q commit filebrowser
 exit 0
 FILEBROWSER
 
+# 3.2b SMB 开箱即用（ksmbd 内核态共享）：默认共享 /mnt 匿名读写，
+#     硬盘挂到 /mnt 下后 Windows/手机"网上邻居"直接可见可写，无需建用户。
+#     UCI 文件 /etc/config/ksmbd（globals + share 结构，见 ksmbd.init）。
+cat > "$OVL/etc/uci-defaults/98-ksmbd-share" <<'KSMBDSHARE'
+#!/bin/sh
+[ -f /etc/config/ksmbd ] || exit 0
+# 监听 lan 口
+uci -q set ksmbd.@globals[0].interface='lan'
+# 匿名读写共享：force_root 免权限坑，guest_ok 免建用户
+uci -q add ksmbd share >/dev/null
+uci -q set ksmbd.@share[-1].name='nas'
+uci -q set ksmbd.@share[-1].path='/mnt'
+uci -q set ksmbd.@share[-1].read_only='no'
+uci -q set ksmbd.@share[-1].guest_ok='yes'
+uci -q set ksmbd.@share[-1].force_root='1'
+uci -q set ksmbd.@share[-1].create_mask='0666'
+uci -q set ksmbd.@share[-1].dir_mask='0777'
+uci -q commit ksmbd
+exit 0
+KSMBDSHARE
+
 # 3.3 登录 IP 192.168.2.1
 cat > "$OVL/etc/uci-defaults/99-lan-ip" <<'LANIP'
 #!/bin/sh
