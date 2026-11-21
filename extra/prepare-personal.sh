@@ -108,7 +108,9 @@ install -m 0755 "$REPO/config/overlay/sbin/tempinfo" "$OVL/sbin/tempinfo"
 # 3.1b 概览页增强：CPU 温度 / CPU 频率 / 固件编译时间三行（覆盖 luci-mod-status 主页 include）
 #     fork 前端靠 autocore 提供的 rpcd 扩展（luci.getTempInfo/getCPUInfo）读数，
 #     个人版不装 autocore，rpcd 方法缺失导致温度/频率行不显示。
-#     此处覆盖 10_system.js：温度/频率改用 fs.read 直读内核 /sys 节点
+#     此处覆盖 10_system.js：温度/频率改用 fs.exec/fs.read 直读内核 /sys 节点
+#     注意：本 fork 的 LuCI fs.js 没有 listdir() 方法，必须用 fs.exec 走 rpcd
+#     执行 shell 读取 thermal zone（fs.read/fs.exec 各版本 LuCI 均有）
 #     （CONFIG_AIROHA_THERMAL 与 CPUFREQ 内核侧均已开启，数据源现成），
 #     保留 fork 原有 rpcd 逻辑作为优先数据源，另新增固件编译时间行（编译时注入）。
 BUILD_TIME="$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M')"
@@ -176,24 +178,14 @@ return baseclass.extend({
 			L.resolveDefault(callTempInfo(), {}),
 			L.resolveDefault(callLuciVersion(), { revision: _('unknown version'), branch: 'LuCI' }),
 			L.resolveDefault(callGetUnixtime(), 0),
-			L.resolveDefault(fs.listdir('/sys/class/thermal'), []),
+			L.resolveDefault(fs.exec('/bin/sh', ['-c',
+				'cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | sort -n | tail -n 1'
+			]), {}),
 			L.resolveDefault(fs.read('/sys/devices/system/cpu/cpufreq/policy0/cpuinfo_cur_freq'), ''),
 			L.resolveDefault(fs.read('/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq'), ''),
 			L.resolveDefault(fs.read('/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq'), ''),
 			uci.load('system')
-		]).then(function(data) {
-			var zones = Array.isArray(data[8]) ? data[8] : [],
-			    reads = [];
-
-			for (var i = 0; i < zones.length; i++)
-				if (/^thermal_zone\d+$/.test(zones[i]))
-					reads.push(L.resolveDefault(fs.read('/sys/class/thermal/' + zones[i] + '/temp'), ''));
-
-			return Promise.all(reads).then(function(temps) {
-				data[8] = temps;
-				return data;
-			});
-		});
+		]);
 	},
 
 	render: function(data) {
@@ -205,7 +197,7 @@ return baseclass.extend({
 		    tempinfo    = data[5],
 		    luciversion = data[6],
 		    unixtime    = data[7],
-		    zoneTemps   = Array.isArray(data[8]) ? data[8] : [],
+		    zoneTemp    = (L.isObject(data[8]) && typeof data[8].stdout == 'string') ? parseInt(data[8].stdout, 10) / 1000.0 : 0,
 		    freqk1      = parseInt(data[9], 10),
 		    freqk2      = parseInt(data[10], 10),
 		    freqk3      = parseInt(data[11], 10);
@@ -228,21 +220,11 @@ return baseclass.extend({
 			}).format(date);
 		}
 
-		/* CPU 温度：优先 rpcd(tempinfo)，兜底遍历 thermal zone 取最大值 */
+		/* CPU 温度：优先 rpcd(tempinfo)，兜底 shell 直读 thermal zone 最大值 */
 		var tempstr = tempinfo.tempinfo || null;
 
-		if (!tempstr && zoneTemps.length) {
-			var t = 0;
-
-			for (var i = 0; i < zoneTemps.length; i++) {
-				var n = parseInt(zoneTemps[i], 10) / 1000.0;
-
-				if (n > 0 && n < 150 && n > t)
-					t = n;
-			}
-
-			tempstr = (t > 0) ? '%.1f ℃'.format(t) : null;
-		}
+		if (!tempstr && zoneTemp > 0 && zoneTemp < 150)
+			tempstr = '%.1f ℃'.format(zoneTemp);
 
 		/* CPU 频率：cpufreq sysfs（单位 kHz），含单核兜底路径 */
 		var freqk = freqk1 || freqk2 || freqk3 || 0,
