@@ -58,9 +58,9 @@ endg
 #      两者都提供 airoha-ponctl / airoha-pon-daemons / airoha-pon-debug，
 #      同时启用会产生同名包冲突
 #    - luci-app-openclash / luci-app-cpufreq 由 immortalwrt/luci feed 提供
-#    - luci-app-ssr-plus 由 fw876/helloworld feed 提供，必须放在 feeds.conf
-#      末尾：它与 immortalwrt/packages 存在同名包（shadowsocks-libev、tcping 等），
-#      按 feeds.conf 顺序后装的覆盖先装的，SSR 协议支持依赖 helloworld 版本
+#    - luci-app-passwall2 由 Openwrt-Passwall/passwall2 feed 提供，
+#      依赖包（xray-core/tcping/geoview/chinadns-ng 等）来自 passwall_packages feed，
+#      它与 immortalwrt/packages 存在同名包（tcping 等），必须后注册以覆盖
 # ---------------------------------------------------------------
 group "写入 feeds.conf"
 cat > feeds.conf <<'FEEDS'
@@ -73,7 +73,8 @@ src-git pon_drivers https://github.com/pbs05/openwrt-pon-drivers.git
 src-git onu https://github.com/naoki66/OpenWrt_ONU_CONFIG.git;main
 src-git airoha https://github.com/naoki66/luci-app-airoha.git;main
 src-git qmodem https://github.com/FUjr/QModem.git;main
-src-git ssr https://github.com/fw876/helloworld.git
+src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git
+src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git
 FEEDS
 cat feeds.conf
 ./scripts/feeds update -a
@@ -448,7 +449,7 @@ fi
 # 严格校验：用户要求的包必须全部入选
 for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
          luci-app-airoha-npu luci-app-qmodem-next qmodem sms-forwarder-next luci-app-openclash \
-         luci-app-ssr-plus xray-core luci-app-cpufreq \
+         luci-app-passwall2 xray-core luci-app-cpufreq \
          luci-theme-aurora luci-app-aurora-config luci-i18n-base-zh-cn \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx \
