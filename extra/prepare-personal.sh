@@ -52,10 +52,42 @@ src-git qmodem https://github.com/FUjr/QModem.git;v3.2.0
 # PassWall2：依赖包仓库在前，luci 应用仓库在后（依赖含 xray-core/sing-box/tcping/geoview 等）
 src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git
 src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git
+src-git tailscale_luci https://github.com/asvow/luci-app-tailscale.git
 FEEDS
 cat feeds.conf
 ./scripts/feeds update -a
 ./scripts/feeds install -a
+endg
+
+# ---------------------------------------------------------------
+# 2.4) PassWall2 无内核改造（用户指定：固件不含代理内核）
+#      passwall2 的 Makefile 把 Basic Core 做成必选 choice（Xray/SingBox/All），
+#      没有"不装内核"选项；这里注入 Basic_Core_None 并设为默认，
+#      xray-core 等内核二进制（~25MB）不再进入固件。
+#      后续要用代理：PassWall2 界面"内核更新"在线下载，或 opkg 安装。
+# ---------------------------------------------------------------
+group "PassWall2 无内核改造（注入 Basic_Core_None）"
+PW2_MK="$SRC/feeds/passwall2/luci-app-passwall2/Makefile"
+[ -f "$PW2_MK" ] || { echo "::error::未找到 passwall2 Makefile（feeds install 未生效？）"; exit 1; }
+if ! grep -q "Basic_Core_None" "$PW2_MK"; then
+python3 - "$PW2_MK" <<'PYEOF'
+import sys
+p = sys.argv[1]
+s = open(p, encoding='utf-8').read()
+a = '\tdefault PACKAGE_$(PKG_NAME)_Basic_Core_All if aarch64||arm||i386||x86_64\n'
+b = '\tdefault PACKAGE_$(PKG_NAME)_Basic_Core_Xray\n'
+assert a in s and b in s, 'Basic Core default 行未匹配，passwall2 上游结构已变'
+s = s.replace(a, '')
+s = s.replace(b, '\tdefault PACKAGE_$(PKG_NAME)_Basic_Core_None\n')
+s = s.replace('endchoice',
+              '\tconfig PACKAGE_$(PKG_NAME)_Basic_Core_None\n'
+              '\t\tbool "None (no core, download later)"\n\nendchoice', 1)
+open(p, 'w', encoding='utf-8').write(s)
+print('Basic_Core_None 选项注入完成')
+PYEOF
+fi
+grep -q "Basic_Core_None" "$PW2_MK" || { echo "::error::Basic_Core_None 注入失败"; exit 1; }
+echo "PassWall2 已改为界面无内核模式"
 endg
 
 # ---------------------------------------------------------------
@@ -270,6 +302,14 @@ return baseclass.extend({
 });
 JSEOF
 sed -i "s|__BUILD_TIME__|$BUILD_TIME|" "$OVL/www/luci-static/resources/view/status/include/10_system.js"
+
+# 3.1c 远程访问：Tailscale 默认开机自启（首次需在 LuCI → 服务 → Tailscale 登录账号）
+cat > "$OVL/etc/uci-defaults/99-tailscale" <<'TS'
+#!/bin/sh
+uci -q set tailscale.settings.enabled='1'
+uci commit tailscale
+exit 0
+TS
 
 # 3.2 登录密码 root
 ROOT_HASH="$(openssl passwd -1 -salt airoha root 2>/dev/null || true)"
@@ -563,7 +603,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          luci-app-openclash luci-app-passwall2 luci-i18n-base-zh-cn luci-theme-argon \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx kmod-tcp-bbr \
-         filebrowser; do
+         filebrowser tailscale luci-app-tailscale; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人精简版缺少 ${p}"
     exit 1
@@ -582,7 +622,7 @@ for p in luci-theme-aurora luci-app-aurora-config luci-theme-vantage \
          kmod-crypto-hw-eip93 kmod-cryptodev \
          luci-app-cpufreq autocore \
          luci-app-qmodem luci-app-qmodem-sms luci-app-qmodem-mwan \
-         luci-app-qmodem-ttl sms-forwarder; do
+         luci-app-qmodem-ttl sms-forwarder xray-core sing-box; do
   if grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人精简版不应包含 ${p}"
     exit 1
@@ -593,5 +633,5 @@ if ! grep -q "^CONFIG_LUCI_LANG_zh_Hans=y$" .config; then
   echo "::error::缺少 CONFIG_LUCI_LANG_zh_Hans，中文翻译包不会生效"
   exit 1
 fi
-echo "个人精简版包校验通过（QModem 全功能 v3.2.0 + 短信转发 + OpenClash 无内核 + PassWall2/Xray + USB 驱动 + NPU/超频）"
+echo "个人精简版包校验通过（QModem 全功能 v3.2.0 + 短信转发 + OpenClash 无内核 + PassWall2 无内核界面 + Tailscale + USB 驱动 + NPU/超频）"
 endg

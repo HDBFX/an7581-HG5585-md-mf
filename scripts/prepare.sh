@@ -75,6 +75,7 @@ src-git airoha https://github.com/naoki66/luci-app-airoha.git;main
 src-git qmodem https://github.com/FUjr/QModem.git;main
 src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git
 src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git
+src-git tailscale_luci https://github.com/asvow/luci-app-tailscale.git
 FEEDS
 cat feeds.conf
 ./scripts/feeds update -a
@@ -300,6 +301,14 @@ esac
 #     /usr/lib/lua/luci/i18n/*.zh-cn.lmo（由 luci-i18n-*-zh-cn 包提供）。
 #     Aurora 包自带 30_luci-theme-aurora 首次安装会设默认，这里 99- 兜底
 #     （显式把 mediaurlbase 指向 aurora，防止任何旧值残留）。
+# 3.5 远程访问：Tailscale 默认开机自启（首次需在 LuCI → 服务 → Tailscale 登录账号）
+cat > "$OVL/etc/uci-defaults/99-tailscale" <<'TS'
+#!/bin/sh
+uci -q set tailscale.settings.enabled='1'
+uci commit tailscale
+exit 0
+TS
+
 cat > "$OVL/etc/uci-defaults/99-lang-theme" <<LANGTHEME
 #!/bin/sh
 uci -q set luci.main.lang='zh_cn'
@@ -454,7 +463,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx \
          autocore kmod-crypto-hw-eip93 kmod-cryptodev openssl-util \
-         libopenssl-devcrypto kmod-tcp-bbr ${EXTRA_REQUIRED_PKGS:-}; do
+         libopenssl-devcrypto kmod-tcp-bbr tailscale luci-app-tailscale ${EXTRA_REQUIRED_PKGS:-}; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::配置缺少 ${p}"
     exit 1
