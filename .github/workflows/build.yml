@@ -146,4 +146,4 @@ jobs:
           gh release create "$TAG" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "正式版四机型 $(date +%Y%m%d-%H%M)" \
-            --notes "机型：hg5585f-ct / hg5585f-cu / xg-040g-md / xg-040g-mf（airoha/an7581）；代理：OpenClash + SSR-Plus（Xray 核心）；短信转发器 + 调优（BBR/RPS/代理调优）+ htop；固件批次 B26。" || true
+            --notes "机型：hg5585f-ct / hg5585f-cu / xg-040g-md（AN7581），xg-040g-mf（AN7583）；代理：OpenClash + PassWall2（Xray 单核心 + nftables 透明代理）；短信转发器 + 调优（BBR/RPS/代理调优）+ htop；固件批次 B26。" || true
