@@ -353,6 +353,20 @@ uci -q commit filebrowser
 exit 0
 FILEBROWSER
 
+# 3.2a 下载工具开箱即用：qBittorrent（BT/磁力，WebUI :8080，账号 admin/adminadmin）
+cat > "$OVL/etc/uci-defaults/98-downloader" <<'DOWNLOADER'
+#!/bin/sh
+# qBittorrent：启用，下载目录 /mnt/sda1（与 DiskMan 挂载点一致）
+uci -q set qbittorrent.config.enabled='1'
+uci -q set qbittorrent.config.download_dir='/mnt/sda1'
+uci -q commit qbittorrent
+# aria2：启用；以 root 运行，避免 aria2 用户对 USB 盘无写权限
+uci -q set aria2.main.enabled='1'
+uci -q set aria2.main.user='root'
+uci -q commit aria2
+exit 0
+DOWNLOADER
+
 # 3.2b SMB 开箱即用（ksmbd 内核态共享）：默认共享 /mnt 匿名读写，
 #     硬盘挂到 /mnt 下后 Windows/手机"网上邻居"直接可见可写，无需建用户。
 #     UCI 文件 /etc/config/ksmbd（globals + share 结构，见 ksmbd.init）。
