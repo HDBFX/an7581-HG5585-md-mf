@@ -290,8 +290,8 @@ return baseclass.extend({
 		if (freqk > 0)
 			freqstr = (freqk >= 1000000) ? '%.2f GHz'.format(freqk / 1000000) : '%d MHz'.format(Math.round(freqk / 1000));
 
-		/* 固件编译时间：编译时注入 */
-		var buildstr = (FW_BUILD_TIME && FW_BUILD_TIME != '__BUILD_TIME__') ? FW_BUILD_TIME : null;
+		/* 固件编译时间：编译时注入（占位符用 indexOf 检测，避免 sed 误伤本行导致永远显示 ?） */
+		var buildstr = (FW_BUILD_TIME && FW_BUILD_TIME.indexOf('BUILD') < 0) ? FW_BUILD_TIME : null;
 
 		var fields = [
 			_('Hostname'),         boardinfo.hostname,
@@ -326,7 +326,12 @@ return baseclass.extend({
 	}
 });
 JSEOF
-sed -i "s|__BUILD_TIME__|$BUILD_TIME|" "$OVL/www/luci-static/resources/view/status/include/10_system.js"
+# 只替换定义行（^var FW_BUILD_TIME），避免误伤其他引用占位符的逻辑行
+sed -i "/^var FW_BUILD_TIME = /s|__BUILD_TIME__|$BUILD_TIME|" "$OVL/www/luci-static/resources/view/status/include/10_system.js"
+# 自检：构建日志打印注入结果，未替换或仍含占位符则报错
+INJECTED="$(grep -o "FW_BUILD_TIME = '[^']*'" "$OVL/www/luci-static/resources/view/status/include/10_system.js" | head -1)"
+echo "BUILD_TIME 注入结果: $INJECTED"
+echo "$INJECTED" | grep -q "FW_BUILD_TIME = '20" || { echo "::error::固件编译时间注入失败"; exit 1; }
 
 # 3.1c 远程访问：Tailscale 默认开机自启（首次需在 LuCI → 服务 → Tailscale 登录账号）
 cat > "$OVL/etc/uci-defaults/99-tailscale" <<'TS'
