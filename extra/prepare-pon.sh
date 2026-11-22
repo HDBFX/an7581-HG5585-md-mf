@@ -97,12 +97,176 @@ group "注入机型定制 ($MODEL)"
 OVL="$SRC/files"
 mkdir -p "$OVL/etc/uci-defaults"
 
-# 3.1 概览页频率/温度显示：LuCI 状态页通过 /sbin/cpuinfo、/sbin/tempinfo 读数。
-#     autocore 只在 ipq*/mediatek*/qualcommax* 安装这两个脚本，airoha 不在其列，
-#     因此直接从本仓库 overlay 注入，不引入 autocore 包、不改 .config。
+# 3.1 概览页频率/温度显示：数据源脚本 /sbin/cpuinfo、/sbin/tempinfo 由 autocore 包
+#     与本仓库 overlay 双保险提供（overlay 优先），rpcd ACL 也由 autocore 提供，
+#     缺它概览页温度/频率/架构会显示 ?
 mkdir -p "$OVL/sbin"
 install -m 0755 "$REPO/config/overlay/sbin/cpuinfo"  "$OVL/sbin/cpuinfo"
 install -m 0755 "$REPO/config/overlay/sbin/tempinfo" "$OVL/sbin/tempinfo"
+
+# 3.1b 概览页增强：CPU 温度 / CPU 频率 / 固件编译时间三行（与个人版同款修复版）
+BUILD_TIME="$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M')"
+mkdir -p "$OVL/www/luci-static/resources/view/status/include"
+cat > "$OVL/www/luci-static/resources/view/status/include/10_system.js" <<'JSEOF'
+'use strict';
+'require baseclass';
+'require fs';
+'require rpc';
+'require uci';
+
+var callGetUnixtime = rpc.declare({
+	object: 'luci',
+	method: 'getUnixtime',
+	expect: { result: 0 }
+});
+
+var callLuciVersion = rpc.declare({
+	object: 'luci',
+	method: 'getVersion'
+});
+
+var callSystemBoard = rpc.declare({
+	object: 'system',
+	method: 'board'
+});
+
+var callSystemInfo = rpc.declare({
+	object: 'system',
+	method: 'info'
+});
+
+var callCPUBench = rpc.declare({
+	object: 'luci',
+	method: 'getCPUBench'
+});
+
+var callCPUInfo = rpc.declare({
+	object: 'luci',
+	method: 'getCPUInfo'
+});
+
+var callCPUUsage = rpc.declare({
+	object: 'luci',
+	method: 'getCPUUsage'
+});
+
+var callTempInfo = rpc.declare({
+	object: 'luci',
+	method: 'getTempInfo'
+});
+
+var FW_BUILD_TIME = '__BUILD_TIME__';
+
+return baseclass.extend({
+	title: _('System'),
+
+	load: function() {
+		return Promise.all([
+			L.resolveDefault(callSystemBoard(), {}),
+			L.resolveDefault(callSystemInfo(), {}),
+			L.resolveDefault(callCPUBench(), {}),
+			L.resolveDefault(callCPUInfo(), {}),
+			L.resolveDefault(callCPUUsage(), {}),
+			L.resolveDefault(callTempInfo(), {}),
+			L.resolveDefault(callLuciVersion(), { revision: _('unknown version'), branch: 'LuCI' }),
+			L.resolveDefault(callGetUnixtime(), 0),
+			L.resolveDefault(fs.exec('/bin/sh', ['-c',
+				'cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | sort -n | tail -n 1'
+			]), {}),
+			L.resolveDefault(fs.read('/sys/devices/system/cpu/cpufreq/policy0/cpuinfo_cur_freq'), ''),
+			L.resolveDefault(fs.read('/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq'), ''),
+			L.resolveDefault(fs.read('/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq'), ''),
+			uci.load('system')
+		]);
+	},
+
+	render: function(data) {
+		var boardinfo   = data[0],
+		    systeminfo  = data[1],
+		    cpubench    = data[2],
+		    cpuinfo     = data[3],
+		    cpuusage    = data[4],
+		    tempinfo    = data[5],
+		    luciversion = data[6],
+		    unixtime    = data[7],
+		    zoneTemp    = (L.isObject(data[8]) && typeof data[8].stdout == 'string') ? parseInt(data[8].stdout, 10) / 1000.0 : 0,
+		    freqk1      = parseInt(data[9], 10),
+		    freqk2      = parseInt(data[10], 10),
+		    freqk3      = parseInt(data[11], 10);
+
+		luciversion = luciversion.branch + ' ' + luciversion.revision;
+
+		var datestr = null;
+
+		if (unixtime) {
+			var date = new Date(unixtime * 1000),
+				zn = uci.get('system', '@system[0]', 'zonename')?.replaceAll(' ', '_') || 'UTC',
+				ts = uci.get('system', '@system[0]', 'clock_timestyle') || 0,
+				hc = uci.get('system', '@system[0]', 'clock_hourcycle') || 0;
+
+			datestr = new Intl.DateTimeFormat(undefined, {
+				dateStyle: 'medium',
+				timeStyle: (ts == 0) ? 'long' : 'full',
+				hourCycle: (hc == 0) ? undefined : hc,
+				timeZone: zn
+			}).format(date);
+		}
+
+		/* CPU 温度：优先 rpcd(tempinfo)，兜底 shell 直读 thermal zone 最大值 */
+		var tempstr = tempinfo.tempinfo || null;
+
+		if (!tempstr && zoneTemp > 0 && zoneTemp < 150)
+			tempstr = '%.1f ℃'.format(zoneTemp);
+
+		/* CPU 频率：cpufreq sysfs（单位 kHz），含单核兜底路径 */
+		var freqk = freqk1 || freqk2 || freqk3 || 0,
+		    freqstr = null;
+
+		if (freqk > 0)
+			freqstr = (freqk >= 1000000) ? '%.2f GHz'.format(freqk / 1000000) : '%d MHz'.format(Math.round(freqk / 1000));
+
+		/* 固件编译时间：编译时注入（占位符用 indexOf 检测，避免 sed 误伤本行导致永远显示 ?） */
+		var buildstr = (FW_BUILD_TIME && FW_BUILD_TIME.indexOf('BUILD') < 0) ? FW_BUILD_TIME : null;
+
+		var fields = [
+			_('Hostname'),         boardinfo.hostname,
+			_('Model'),            boardinfo.model + cpubench.cpubench,
+			_('Architecture'),     cpuinfo.cpuinfo || boardinfo.system,
+			_('Target Platform'),  (L.isObject(boardinfo.release) ? boardinfo.release.target : ''),
+			_('Firmware Version'), (L.isObject(boardinfo.release) ? boardinfo.release.description + ' / ' : '') + (luciversion || ''),
+			_('固件编译时间'),      buildstr,
+			_('Kernel Version'),   boardinfo.kernel,
+			_('CPU 温度'),         tempstr,
+			_('CPU 频率'),         freqstr,
+			_('Local Time'),       datestr,
+			_('Uptime'),           systeminfo.uptime ? '%t'.format(systeminfo.uptime) : null,
+			_('Load Average'),     Array.isArray(systeminfo.load) ? '%.2f, %.2f, %.2f'.format(
+				systeminfo.load[0] / 65535.0,
+				systeminfo.load[1] / 65535.0,
+				systeminfo.load[2] / 65535.0
+			) : null,
+			_('CPU usage (%)'),    cpuusage.cpuusage
+		];
+
+		var table = E('table', { 'class': 'table' });
+
+		for (var i = 0; i < fields.length; i += 2) {
+			table.appendChild(E('tr', { 'class': 'tr' }, [
+				E('td', { 'class': 'td left', 'width': '33%' }, [ fields[i] ]),
+				E('td', { 'class': 'td left' }, [ (fields[i + 1] != null) ? fields[i + 1] : '?' ])
+			]));
+		}
+
+		return table;
+	}
+});
+JSEOF
+# 只替换定义行（^var FW_BUILD_TIME），避免误伤其他引用占位符的逻辑行
+sed -i "/^var FW_BUILD_TIME = /s|__BUILD_TIME__|$BUILD_TIME|" "$OVL/www/luci-static/resources/view/status/include/10_system.js"
+# 自检：构建日志打印注入结果，未替换或仍含占位符则报错
+INJECTED="$(grep -o "FW_BUILD_TIME = '[^']*'" "$OVL/www/luci-static/resources/view/status/include/10_system.js" | head -1)"
+echo "BUILD_TIME 注入结果: $INJECTED"
+echo "$INJECTED" | grep -q "FW_BUILD_TIME = '20" || { echo "::error::固件编译时间注入失败"; exit 1; }
 
 # 3.2 登录密码 root
 ROOT_HASH="$(openssl passwd -1 -salt airoha root 2>/dev/null || true)"
@@ -301,7 +465,7 @@ group "校验个人光猫专版包集合"
 # 正向：必须全部入选（PON/ONU 核心 + NPU/超频 + 中文 + BBR）
 for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
          luci-app-airoha-npu \
-         luci-i18n-base-zh-cn kmod-tcp-bbr; do
+         luci-i18n-base-zh-cn kmod-tcp-bbr autocore; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人光猫专版缺少 ${p}"
     exit 1
@@ -325,7 +489,7 @@ for p in qmodem qfirehose \
          usb-modeswitch kmod-usb-net-qmi-wwan kmod-mtk-t7xx \
          luci-theme-argon luci-theme-aurora luci-app-aurora-config \
          luci-theme-vantage luci-app-vantage luci-app-passwall \
-         kmod-crypto-hw-eip93 kmod-cryptodev luci-app-cpufreq autocore; do
+         kmod-crypto-hw-eip93 kmod-cryptodev luci-app-cpufreq ; do
   if grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人光猫专版不应包含 ${p}"
     exit 1
