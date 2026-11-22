@@ -111,26 +111,23 @@ grep -q 'LuCI configuration UI for the Aurora theme' "$AURORA_CFG_DIR/Makefile" 
 endg
 
 # ---------------------------------------------------------------
-# 2.5b) luci-app-tailscale（asvow 版远程组网界面）
-#       注意：该仓库根目录就是包结构（无子目录），scripts/feeds 扫描不到，
-#       与 Aurora 主题同款方式：clone 后整体拷入 package/
+# 2.5b) ddnsto 内网穿透（koolcenter 官方闭源 ipk，中文界面）
+#       闭源预编译包无法走 buildroot feeds，构建时下载进 files/，
+#       首次开机由 uci-defaults 执行 opkg 离线安装并注册自启
 # ---------------------------------------------------------------
-group "引入 luci-app-tailscale (asvow)"
-TS_DIR="$SRC/package/luci-app-tailscale"
-if [ ! -f "$TS_DIR/Makefile" ]; then
-  rm -rf /tmp/luci-app-tailscale-src
-  git clone --depth 1 https://github.com/asvow/luci-app-tailscale.git /tmp/luci-app-tailscale-src
-  mkdir -p "$TS_DIR"
-  cp -a /tmp/luci-app-tailscale-src/. "$TS_DIR/"
-  rm -rf /tmp/luci-app-tailscale-src
-fi
-# 修复安装冲突：feed 的官方 tailscale 主包自带 /etc/init.d/tailscale 与 /etc/config/tailscale，
-# asvow 界面包也带同名文件 → opkg check_data_file_clashes 报错。
-# 删除界面包内两份，保留官方版本（登录走 tailscale CLI，不受影响；开机自启走官方 init.d）。
-rm -f "$TS_DIR/root/etc/config/tailscale" "$TS_DIR/root/etc/init.d/tailscale"
-test ! -e "$TS_DIR/root/etc/init.d/tailscale" || { echo "::error::tailscale 冲突文件删除失败"; exit 1; }
-grep -q 'LUCI_TITLE' "$TS_DIR/Makefile" || { echo "::error::luci-app-tailscale 源码不完整"; exit 1; }
-echo "luci-app-tailscale 就绪"
+group "下载 ddnsto 离线包"
+DDNSTO_BASE="http://fw.koolcenter.com/binary/ddnsto/openwrt"
+mkdir -p "$SRC/files/root"
+for f in standard/4.2.8/ddnsto_aarch64.ipk luci-app-ddnsto.ipk luci-i18n-ddnsto-zh-cn.ipk; do
+  fn="$(basename "$f")"
+  curl -fsSLk "$DDNSTO_BASE/$f" -o "$SRC/files/root/$fn" || { echo "::error::ddnsto 下载失败: $fn"; exit 1; }
+  [ -s "$SRC/files/root/$fn" ] || { echo "::error::ddnsto 包为空: $fn"; exit 1; }
+done
+for f in ddnsto_aarch64.ipk luci-app-ddnsto.ipk luci-i18n-ddnsto-zh-cn.ipk; do
+  test -s "$SRC/files/root/$f" || { echo "::error::ddnsto 包缺失: $f"; exit 1; }
+done
+ls -lh "$SRC/files/root/" | grep ipk
+echo "ddnsto 三个离线包就绪（客户端 4.2.8 + LuCI 界面 + 中文包）"
 endg
 
 # ---------------------------------------------------------------
@@ -323,13 +320,20 @@ esac
 #     /usr/lib/lua/luci/i18n/*.zh-cn.lmo（由 luci-i18n-*-zh-cn 包提供）。
 #     Aurora 包自带 30_luci-theme-aurora 首次安装会设默认，这里 99- 兜底
 #     （显式把 mediaurlbase 指向 aurora，防止任何旧值残留）。
-# 3.5 远程访问：Tailscale 默认开机自启（首次需在 LuCI → 服务 → Tailscale 登录账号）
-cat > "$OVL/etc/uci-defaults/99-tailscale" <<'TS'
+# 3.5 远程访问：ddnsto 内网穿透（首次开机离线安装三件套并注册自启）
+cat > "$OVL/etc/uci-defaults/99-ddnsto" <<'TS'
 #!/bin/sh
-# 开机自启：注册 rc.d 符号链接（uci 的 settings.enabled 仅作占位，官方 init.d 不读它）
-/etc/init.d/tailscale enable 2>/dev/null || true
-uci -q set tailscale.settings.enabled='1'
-uci commit tailscale
+# 首次开机安装 ddnsto 离线包（闭源预编译 ipk 无法走 buildroot feeds）
+# 安装顺序：主程序 → LuCI 界面 → 中文语言包，然后注册开机自启
+opkg install /root/ddnsto_aarch64.ipk 2>/dev/null
+opkg install /root/luci-app-ddnsto.ipk 2>/dev/null
+opkg install /root/luci-i18n-ddnsto-zh-cn.ipk 2>/dev/null
+if command -v ddnsto >/dev/null 2>&1; then
+  /etc/init.d/ddnsto enable 2>/dev/null || true
+  rm -f /root/ddnsto_aarch64.ipk /root/luci-app-ddnsto.ipk /root/luci-i18n-ddnsto-zh-cn.ipk
+else
+  logger -t ddnsto "离线安装失败，ipk 保留在 /root/ 供手动排查"
+fi
 exit 0
 TS
 
@@ -487,7 +491,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx \
          autocore kmod-crypto-hw-eip93 kmod-cryptodev openssl-util \
-         libopenssl-devcrypto kmod-tcp-bbr tailscale luci-app-tailscale ${EXTRA_REQUIRED_PKGS:-}; do
+         libopenssl-devcrypto kmod-tcp-bbr ${EXTRA_REQUIRED_PKGS:-}; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::配置缺少 ${p}"
     exit 1
@@ -509,6 +513,12 @@ fi
 if grep -Eq '^CONFIG_PACKAGE_luci-app-passwall=y$|^CONFIG_PACKAGE_luci-app-passwall=' .config; then
   echo "::error::luci-app-passwall 不应被选中（已由 ssr-plus 取代）"
   grep -E '^CONFIG_PACKAGE_.*passwall' .config || true
+  exit 1
+fi
+# 反向校验：Tailscale 已由 ddnsto 取代，若依赖残留被连带选中则立即失败
+if grep -Eq '^CONFIG_PACKAGE_(tailscale|luci-app-tailscale)=y$' .config; then
+  echo "::error::tailscale 不应被选中（远程访问已由 ddnsto 离线包取代）"
+  grep -E '^CONFIG_PACKAGE_.*tailscale' .config || true
   exit 1
 fi
 # 语言开关是 HIDDEN 中文包能否被选中的前提，必须存在
