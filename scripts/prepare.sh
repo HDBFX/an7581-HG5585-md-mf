@@ -75,7 +75,6 @@ src-git airoha https://github.com/naoki66/luci-app-airoha.git;main
 src-git qmodem https://github.com/FUjr/QModem.git;main
 src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git
 src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git
-src-git tailscale_luci https://github.com/asvow/luci-app-tailscale.git
 FEEDS
 cat feeds.conf
 ./scripts/feeds update -a
@@ -109,6 +108,24 @@ grep -q 'LuCI configuration UI for the Aurora theme' "$AURORA_CFG_DIR/Makefile" 
   echo "::error::Aurora 配置插件源码不完整"
   exit 1
 }
+endg
+
+# ---------------------------------------------------------------
+# 2.5b) luci-app-tailscale（asvow 版远程组网界面）
+#       注意：该仓库根目录就是包结构（无子目录），scripts/feeds 扫描不到，
+#       与 Aurora 主题同款方式：clone 后整体拷入 package/
+# ---------------------------------------------------------------
+group "引入 luci-app-tailscale (asvow)"
+TS_DIR="$SRC/package/luci-app-tailscale"
+if [ ! -f "$TS_DIR/Makefile" ]; then
+  rm -rf /tmp/luci-app-tailscale-src
+  git clone --depth 1 https://github.com/asvow/luci-app-tailscale.git /tmp/luci-app-tailscale-src
+  mkdir -p "$TS_DIR"
+  cp -a /tmp/luci-app-tailscale-src/. "$TS_DIR/"
+  rm -rf /tmp/luci-app-tailscale-src
+fi
+grep -q 'LUCI_TITLE' "$TS_DIR/Makefile" || { echo "::error::luci-app-tailscale 源码不完整"; exit 1; }
+echo "luci-app-tailscale 就绪"
 endg
 
 # ---------------------------------------------------------------

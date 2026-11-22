@@ -52,7 +52,6 @@ src-git qmodem https://github.com/FUjr/QModem.git;v3.2.0
 # PassWall2：依赖包仓库在前，luci 应用仓库在后（依赖含 xray-core/sing-box/tcping/geoview 等）
 src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git
 src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git
-src-git tailscale_luci https://github.com/asvow/luci-app-tailscale.git
 FEEDS
 cat feeds.conf
 ./scripts/feeds update -a
@@ -88,6 +87,32 @@ PYEOF
 fi
 grep -q "Basic_Core_None" "$PW2_MK" || { echo "::error::Basic_Core_None 注入失败"; exit 1; }
 echo "PassWall2 已改为界面无内核模式"
+endg
+
+# ---------------------------------------------------------------
+# 2.4b) luci-app-tailscale（asvow 版远程组网界面）
+#       注意：该仓库根目录就是包结构（无子目录），scripts/feeds 扫描不到，
+#       与 airoha-npu 同款方式：clone 后整体拷入 package/
+# ---------------------------------------------------------------
+group "引入 luci-app-tailscale (asvow)"
+TS_DIR="$SRC/package/luci-app-tailscale"
+if [ ! -f "$TS_DIR/Makefile" ]; then
+  rm -rf /tmp/luci-app-tailscale-src
+  git clone --depth 1 https://github.com/asvow/luci-app-tailscale.git /tmp/luci-app-tailscale-src
+  mkdir -p "$TS_DIR"
+  cp -a /tmp/luci-app-tailscale-src/. "$TS_DIR/"
+  rm -rf /tmp/luci-app-tailscale-src
+fi
+grep -q 'LUCI_TITLE' "$TS_DIR/Makefile" || { echo "::error::luci-app-tailscale 源码不完整"; exit 1; }
+echo "luci-app-tailscale 就绪"
+endg
+
+# 2.4c) autocore 重新引入：fork 主页温度/频率/架构 rpcd 读数的 ACL（luci-mod-status-autocore.json）
+#       与 /sbin/cpuinfo、/sbin/tempinfo 都由该包提供，个人版此前误删导致概览页三项显示 ?；
+#       包本身是纯脚本（含与 overlay 同名文件，overlay files/ 优先级更高，无冲突）
+group "引入 autocore（概览页温度/频率读数 + rpcd ACL）"
+grep -Fq "CONFIG_PACKAGE_autocore=y" "$SRC/.config" 2>/dev/null || true
+echo "autocore 由 seed-personal.config 提供（CONFIG_PACKAGE_autocore=y）"
 endg
 
 # ---------------------------------------------------------------
@@ -603,7 +628,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          luci-app-openclash luci-app-passwall2 luci-i18n-base-zh-cn luci-theme-argon \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx kmod-tcp-bbr \
-         filebrowser tailscale luci-app-tailscale; do
+         filebrowser tailscale luci-app-tailscale autocore; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人精简版缺少 ${p}"
     exit 1
@@ -620,7 +645,7 @@ done
 for p in luci-theme-aurora luci-app-aurora-config luci-theme-vantage \
          luci-app-vantage luci-app-passwall luci-app-ssr-plus \
          kmod-crypto-hw-eip93 kmod-cryptodev \
-         luci-app-cpufreq autocore \
+         luci-app-cpufreq \
          luci-app-qmodem luci-app-qmodem-sms luci-app-qmodem-mwan \
          luci-app-qmodem-ttl sms-forwarder xray-core sing-box; do
   if grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
