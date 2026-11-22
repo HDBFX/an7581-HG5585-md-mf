@@ -90,26 +90,21 @@ echo "PassWall2 已改为界面无内核模式"
 endg
 
 # ---------------------------------------------------------------
-# 2.4b) luci-app-tailscale（asvow 版远程组网界面）
-#       注意：该仓库根目录就是包结构（无子目录），scripts/feeds 扫描不到，
-#       与 airoha-npu 同款方式：clone 后整体拷入 package/
+# 2.4b) ddnsto 内网穿透（koolcenter 官方闭源 ipk，中文界面）
+#       替换原 Tailscale：国内服务直连、微信扫码绑定、无需公网 IP。
+#       集成方式：构建时下载三个 ipk 进 rootfs(/root/)，uci-defaults
+#       首次开机 opkg 离线安装并自启（预编译闭源包无法走 buildroot feeds）。
 # ---------------------------------------------------------------
-group "引入 luci-app-tailscale (asvow)"
-TS_DIR="$SRC/package/luci-app-tailscale"
-if [ ! -f "$TS_DIR/Makefile" ]; then
-  rm -rf /tmp/luci-app-tailscale-src
-  git clone --depth 1 https://github.com/asvow/luci-app-tailscale.git /tmp/luci-app-tailscale-src
-  mkdir -p "$TS_DIR"
-  cp -a /tmp/luci-app-tailscale-src/. "$TS_DIR/"
-  rm -rf /tmp/luci-app-tailscale-src
-fi
-# 修复安装冲突：feed 的官方 tailscale 主包自带 /etc/init.d/tailscale 与 /etc/config/tailscale，
-# asvow 界面包也带同名文件 → opkg check_data_file_clashes 报错。
-# 删除界面包内两份，保留官方版本（登录走 tailscale CLI，不受影响；开机自启走官方 init.d）。
-rm -f "$TS_DIR/root/etc/config/tailscale" "$TS_DIR/root/etc/init.d/tailscale"
-test ! -e "$TS_DIR/root/etc/init.d/tailscale" || { echo "::error::tailscale 冲突文件删除失败"; exit 1; }
-grep -q 'LUCI_TITLE' "$TS_DIR/Makefile" || { echo "::error::luci-app-tailscale 源码不完整"; exit 1; }
-echo "luci-app-tailscale 就绪"
+group "下载 ddnsto 离线包"
+DDNSTO_BASE="http://fw.koolcenter.com/binary/ddnsto/openwrt"
+mkdir -p "$SRC/files/root"
+for f in standard/4.2.8/ddnsto_aarch64.ipk luci-app-ddnsto.ipk luci-i18n-ddnsto-zh-cn.ipk; do
+  fn="$(basename "$f")"
+  curl -fsSLk "$DDNSTO_BASE/$f" -o "$SRC/files/root/$fn" || { echo "::error::ddnsto 下载失败: $fn"; exit 1; }
+  [ -s "$SRC/files/root/$fn" ] || { echo "::error::ddnsto 包为空: $fn"; exit 1; }
+done
+ls -lh "$SRC/files/root/" | grep ipk
+echo "ddnsto 三个离线包就绪（客户端 4.2.8 + LuCI 界面 + 中文包）"
 endg
 
 # 2.4c) autocore 重新引入：fork 主页温度/频率/架构 rpcd 读数的 ACL（luci-mod-status-autocore.json）
@@ -346,12 +341,19 @@ echo "BUILD_TIME 注入结果: $INJECTED"
 echo "$INJECTED" | grep -q "FW_BUILD_TIME = '20" || { echo "::error::固件编译时间注入失败"; exit 1; }
 
 # 3.1c 远程访问：Tailscale 默认开机自启（首次需在 LuCI → 服务 → Tailscale 登录账号）
-cat > "$OVL/etc/uci-defaults/99-tailscale" <<'TS'
+cat > "$OVL/etc/uci-defaults/99-ddnsto" <<'TS'
 #!/bin/sh
-# 开机自启：注册 rc.d 符号链接（uci 的 settings.enabled 仅作占位，官方 init.d 不读它）
-/etc/init.d/tailscale enable 2>/dev/null || true
-uci -q set tailscale.settings.enabled='1'
-uci commit tailscale
+# 首次开机安装 ddnsto 离线包（闭源预编译 ipk 无法走 buildroot feeds）
+# 安装顺序：主程序 → LuCI 界面 → 中文语言包，然后注册开机自启
+opkg install /root/ddnsto_aarch64.ipk 2>/dev/null
+opkg install /root/luci-app-ddnsto.ipk 2>/dev/null
+opkg install /root/luci-i18n-ddnsto-zh-cn.ipk 2>/dev/null
+if command -v ddnsto >/dev/null 2>&1; then
+  /etc/init.d/ddnsto enable 2>/dev/null || true
+  rm -f /root/ddnsto_aarch64.ipk /root/luci-app-ddnsto.ipk /root/luci-i18n-ddnsto-zh-cn.ipk
+else
+  logger -t ddnsto "离线安装失败，ipk 保留在 /root/ 供手动排查"
+fi
 exit 0
 TS
 
@@ -647,7 +649,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          luci-app-openclash luci-app-passwall2 luci-i18n-base-zh-cn luci-theme-argon \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx kmod-tcp-bbr \
-         filebrowser tailscale luci-app-tailscale autocore \
+         filebrowser autocore \
          luci-app-cpufreq kmod-crypto-hw-eip93 kmod-cryptodev \
          openssl-util libopenssl-devcrypto; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
@@ -663,9 +665,10 @@ for c in CONFIG_BUSYBOX_CUSTOM CONFIG_BUSYBOX_CONFIG_DEVMEM CONFIG_KERNEL_DEVMEM
   fi
 done
 # 反向：确认精简目标确实不在固件里
-# （EIP93/cryptodev/cpufreq 已按用户要求重新引入，不再排除）
+# （EIP93/cryptodev/cpufreq 已按用户要求重新引入；Tailscale 已按用户要求移除，换 ddnsto）
 for p in luci-theme-aurora luci-app-aurora-config luci-theme-vantage \
          luci-app-vantage luci-app-passwall luci-app-ssr-plus \
+         tailscale luci-app-tailscale \
          luci-app-qmodem luci-app-qmodem-sms luci-app-qmodem-mwan \
          luci-app-qmodem-ttl sms-forwarder xray-core sing-box; do
   if grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
