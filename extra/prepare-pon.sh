@@ -175,7 +175,7 @@ return baseclass.extend({
 			]), {}),
 			L.resolveDefault(fs.read('/sys/devices/system/cpu/cpufreq/policy0/cpuinfo_cur_freq'), ''),
 			L.resolveDefault(fs.read('/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq'), ''),
-			L.resolveDefault(fs.read('/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq'), ''),
+			L.resolveDefault(fs.read('/sys/devices/system/cpu/cpufreq/cpu0/cpuinfo_cur_freq'), ''),
 			uci.load('system')
 		]);
 	},
@@ -218,12 +218,19 @@ return baseclass.extend({
 		if (!tempstr && zoneTemp > 0 && zoneTemp < 150)
 			tempstr = '%.1f ℃'.format(zoneTemp);
 
-		/* CPU 频率：cpufreq sysfs（单位 kHz），含单核兜底路径 */
+		/* CPU 频率：优先 cpufreq sysfs（kHz），airoha 布局非标准时从 cpuinfo
+		   输出解析（格式 "…x 2 (1050MHz, 58.4°C)"，rpcd getCPUInfo 产物，必有） */
 		var freqk = freqk1 || freqk2 || freqk3 || 0,
 		    freqstr = null;
 
-		if (freqk > 0)
+		if (freqk > 0) {
 			freqstr = (freqk >= 1000000) ? '%.2f GHz'.format(freqk / 1000000) : '%d MHz'.format(Math.round(freqk / 1000));
+		} else {
+			var mf = (typeof cpuinfo.cpuinfo == 'string' ? cpuinfo.cpuinfo : '').match(/\((\d+)\s*MHz/);
+
+			if (mf && parseInt(mf[1], 10) > 0)
+				freqstr = (parseInt(mf[1], 10) >= 1000) ? '%.2f GHz'.format(parseInt(mf[1], 10) / 1000) : '%d MHz'.format(mf[1]);
+		}
 
 		/* 固件编译时间：编译时注入（占位符用 indexOf 检测，避免 sed 误伤本行导致永远显示 ?） */
 		var buildstr = (FW_BUILD_TIME && FW_BUILD_TIME.indexOf('BUILD') < 0) ? FW_BUILD_TIME : null;
