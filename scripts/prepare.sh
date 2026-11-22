@@ -124,6 +124,11 @@ if [ ! -f "$TS_DIR/Makefile" ]; then
   cp -a /tmp/luci-app-tailscale-src/. "$TS_DIR/"
   rm -rf /tmp/luci-app-tailscale-src
 fi
+# 修复安装冲突：feed 的官方 tailscale 主包自带 /etc/init.d/tailscale 与 /etc/config/tailscale，
+# asvow 界面包也带同名文件 → opkg check_data_file_clashes 报错。
+# 删除界面包内两份，保留官方版本（登录走 tailscale CLI，不受影响；开机自启走官方 init.d）。
+rm -f "$TS_DIR/root/etc/config/tailscale" "$TS_DIR/root/etc/init.d/tailscale"
+test ! -e "$TS_DIR/root/etc/init.d/tailscale" || { echo "::error::tailscale 冲突文件删除失败"; exit 1; }
 grep -q 'LUCI_TITLE' "$TS_DIR/Makefile" || { echo "::error::luci-app-tailscale 源码不完整"; exit 1; }
 echo "luci-app-tailscale 就绪"
 endg
@@ -321,6 +326,8 @@ esac
 # 3.5 远程访问：Tailscale 默认开机自启（首次需在 LuCI → 服务 → Tailscale 登录账号）
 cat > "$OVL/etc/uci-defaults/99-tailscale" <<'TS'
 #!/bin/sh
+# 开机自启：注册 rc.d 符号链接（uci 的 settings.enabled 仅作占位，官方 init.d 不读它）
+/etc/init.d/tailscale enable 2>/dev/null || true
 uci -q set tailscale.settings.enabled='1'
 uci commit tailscale
 exit 0
