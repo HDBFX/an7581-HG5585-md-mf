@@ -640,7 +640,9 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          luci-app-openclash luci-app-passwall2 luci-i18n-base-zh-cn luci-theme-argon \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx kmod-tcp-bbr \
-         filebrowser tailscale luci-app-tailscale autocore; do
+         filebrowser tailscale luci-app-tailscale autocore \
+         luci-app-cpufreq kmod-crypto-hw-eip93 kmod-cryptodev \
+         openssl-util libopenssl-devcrypto; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人精简版缺少 ${p}"
     exit 1
@@ -654,10 +656,9 @@ for c in CONFIG_BUSYBOX_CUSTOM CONFIG_BUSYBOX_CONFIG_DEVMEM CONFIG_KERNEL_DEVMEM
   fi
 done
 # 反向：确认精简目标确实不在固件里
+# （EIP93/cryptodev/cpufreq 已按用户要求重新引入，不再排除）
 for p in luci-theme-aurora luci-app-aurora-config luci-theme-vantage \
          luci-app-vantage luci-app-passwall luci-app-ssr-plus \
-         kmod-crypto-hw-eip93 kmod-cryptodev \
-         luci-app-cpufreq \
          luci-app-qmodem luci-app-qmodem-sms luci-app-qmodem-mwan \
          luci-app-qmodem-ttl sms-forwarder xray-core sing-box; do
   if grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
