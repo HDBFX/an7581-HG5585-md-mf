@@ -1,4 +1,4 @@
-name: 构建 an7581 四机型固件
+name: 构建 an7581 五机型固件
 
 # 推送到 main 自动开始构建；也可在 Actions 页面手动触发
 on:
@@ -40,6 +40,9 @@ jobs:
           - model: xg-040g-mf
             profile: nokia_xg-040g-mf-ubi
             subtarget: an7583
+          - model: h3c_hm2004-du
+            profile: h3c_hm2004-du
+            subtarget: an7581
     env:
       FORCE_UNSAFE_CONFIGURE: "1"
     steps:

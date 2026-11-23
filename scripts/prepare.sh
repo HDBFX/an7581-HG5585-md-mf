@@ -18,7 +18,7 @@ case "$SUBTARGET" in
   *) echo "::error::不支持的 Airoha 子目标: ${SUBTARGET}"; exit 1 ;;
 esac
 case "$MODEL:$SUBTARGET" in
-  hg5585f-ct:an7581|hg5585f-cu:an7581|xg-040g-md:an7581|xg-040g-mf:an7583) ;;
+  hg5585f-ct:an7581|hg5585f-cu:an7581|xg-040g-md:an7581|xg-040g-mf:an7583|h3c_hm2004-du:an7581) ;;
   *) echo "::error::机型与 Airoha 子目标不匹配: ${MODEL} / ${SUBTARGET}"; exit 1 ;;
 esac
 
@@ -297,11 +297,11 @@ UCIBATCH
 exit 0
 LANIP
 
-# 3.3 WiFi：hg5585f 系列，SSID 以机型命名(HG5585F-CT / HG5585F-CU ...)，密码八个 8
-#     不是 hg5585f 的机型(如 xg-040g 系列无 WiFi)则跳过
+# 3.3 WiFi：hg5585f 系列与 HM2004-DU，SSID 以机型命名(HG5585F-CT / HM2004-DU ...)，密码八个 8
+#     不是 hg5585f/hm2004 的机型(如 xg-040g 系列)则跳过
 case "$MODEL" in
-  hg5585f-*)
-    SSID="$(printf '%s' "$MODEL" | tr '[:lower:]' '[:upper:]')"
+  hg5585f-*|h3c_hm2004-du)
+    SSID="$(printf '%s' "$MODEL" | sed 's/^h3c_hm2004-du$/HM2004-DU/' | tr '[:lower:]' '[:upper:]')"
 cat > "$OVL/etc/uci-defaults/99-wifi" <<'WIFI'
 #!/bin/sh
 SSID='__SSID__'
