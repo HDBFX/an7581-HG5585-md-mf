@@ -108,21 +108,13 @@ echo "ddnsto 三个离线包就绪（客户端 4.2.8 + LuCI 界面 + 中文包�
 endg
 
 # ---------------------------------------------------------------
-# 2.4c) luci-app-wechatpush（微信推送 tty228 版）+ luci-app-accesscontrol（上网时段管控）
-#       两个都是单包仓库（根目录即包结构），scripts/feeds 扫描不到，
-#       clone 后整体拷入 package/（与 NPU 包同模式）
+# 2.4c) luci-app-accesscontrol（上网时段管控，afala2020 版）
+#       单包仓库且 immortalwrt/luci 未收录，clone 拷入 package/（与 NPU 包同模式）。
+#       原版 Makefile 用相对路径 include ../../luci.mk（仅 feed 子目录层级有效），
+#       拷入 package/ 顶层后解析失败导致包被构建系统静默跳过，须改为 $(TOPDIR) 绝对路径。
+#       wechatpush（微信推送）已由 immortalwrt/luci feed 直接收录，无需拷入。
 # ---------------------------------------------------------------
-group "引入 wechatpush 与 accesscontrol"
-WP_DIR="$SRC/package/luci-app-wechatpush"
-if [ ! -f "$WP_DIR/Makefile" ]; then
-  rm -rf /tmp/wechatpush-src
-  git clone --depth 1 https://github.com/tty228/luci-app-wechatpush.git /tmp/wechatpush-src
-  mkdir -p "$WP_DIR"
-  cp -a /tmp/wechatpush-src/. "$WP_DIR/"
-  rm -rf /tmp/wechatpush-src
-fi
-grep -q 'LUCI_TITLE' "$WP_DIR/Makefile" || { echo "::error::luci-app-wechatpush 源码不完整"; exit 1; }
-
+group "引入 luci-app-accesscontrol (afala2020)"
 AC_DIR="$SRC/package/luci-app-accesscontrol"
 if [ ! -f "$AC_DIR/Makefile" ]; then
   rm -rf /tmp/accesscontrol-src
@@ -131,8 +123,10 @@ if [ ! -f "$AC_DIR/Makefile" ]; then
   cp -a /tmp/accesscontrol-src/. "$AC_DIR/"
   rm -rf /tmp/accesscontrol-src
 fi
+sed -i 's|include ../../luci.mk|include $(TOPDIR)/feeds/luci/luci.mk|' "$AC_DIR/Makefile"
+grep -q 'feeds/luci/luci.mk' "$AC_DIR/Makefile" || { echo "::error::accesscontrol Makefile include 修复失败"; exit 1; }
 grep -q 'LUCI_TITLE' "$AC_DIR/Makefile" || { echo "::error::luci-app-accesscontrol 源码不完整"; exit 1; }
-echo "wechatpush + accesscontrol 就绪"
+echo "luci-app-accesscontrol 就绪"
 endg
 
 # 2.4c) autocore 重新引入：fork 主页温度/频率/架构 rpcd 读数的 ACL（luci-mod-status-autocore.json）
