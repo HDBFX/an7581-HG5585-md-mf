@@ -147,6 +147,10 @@ if [ ! -f "$AC_DIR/Makefile" ]; then
   rm -rf /tmp/accesscontrol-src
 fi
 sed -i 's|include ../../luci.mk|include $(TOPDIR)/feeds/luci/luci.mk|' "$AC_DIR/Makefile"
+# po 目录名对齐官方规范：旧式 zh-cn → zh_Hans（官方语言代码，i18n 包名仍为 -zh-cn，
+# 且受已有的 CONFIG_LUCI_LANG_zh_Hans=y 语言开关控制；否则开关名非法导致包不被选中）
+mv "$AC_DIR/po/zh-cn" "$AC_DIR/po/zh_Hans" 2>/dev/null || true
+test -d "$AC_DIR/po/zh_Hans" || { echo "::error::accesscontrol po 目录改名失败"; exit 1; }
 grep -q 'feeds/luci/luci.mk' "$AC_DIR/Makefile" || { echo "::error::accesscontrol Makefile include 修复失败"; exit 1; }
 grep -q 'LUCI_TITLE' "$AC_DIR/Makefile" || { echo "::error::luci-app-accesscontrol 源码不完整"; exit 1; }
 echo "luci-app-accesscontrol 就绪"
