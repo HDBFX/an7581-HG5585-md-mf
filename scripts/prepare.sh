@@ -131,6 +131,34 @@ echo "ddnsto 三个离线包就绪（客户端 4.2.8 + LuCI 界面 + 中文包�
 endg
 
 # ---------------------------------------------------------------
+# 2.5c) luci-app-wechatpush（微信推送 tty228 版）+ luci-app-accesscontrol（上网时段管控）
+#       两个都是单包仓库（根目录即包结构），scripts/feeds 扫描不到，
+#       clone 后整体拷入 package/（与 NPU 包同模式）
+# ---------------------------------------------------------------
+group "引入 wechatpush 与 accesscontrol"
+WP_DIR="$SRC/package/luci-app-wechatpush"
+if [ ! -f "$WP_DIR/Makefile" ]; then
+  rm -rf /tmp/wechatpush-src
+  git clone --depth 1 https://github.com/tty228/luci-app-wechatpush.git /tmp/wechatpush-src
+  mkdir -p "$WP_DIR"
+  cp -a /tmp/wechatpush-src/. "$WP_DIR/"
+  rm -rf /tmp/wechatpush-src
+fi
+grep -q 'LUCI_TITLE' "$WP_DIR/Makefile" || { echo "::error::luci-app-wechatpush 源码不完整"; exit 1; }
+
+AC_DIR="$SRC/package/luci-app-accesscontrol"
+if [ ! -f "$AC_DIR/Makefile" ]; then
+  rm -rf /tmp/accesscontrol-src
+  git clone --depth 1 https://github.com/afala2020/luci-app-accesscontrol.git /tmp/accesscontrol-src
+  mkdir -p "$AC_DIR"
+  cp -a /tmp/accesscontrol-src/. "$AC_DIR/"
+  rm -rf /tmp/accesscontrol-src
+fi
+grep -q 'LUCI_TITLE' "$AC_DIR/Makefile" || { echo "::error::luci-app-accesscontrol 源码不完整"; exit 1; }
+echo "wechatpush + accesscontrol 就绪"
+endg
+
+# ---------------------------------------------------------------
 # 3) 机型定制（OpenWrt files/ overlay，直接编进 rootfs）
 # ---------------------------------------------------------------
 group "注入机型定制 ($MODEL)"
@@ -491,7 +519,16 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx \
          autocore kmod-crypto-hw-eip93 kmod-cryptodev openssl-util \
-         libopenssl-devcrypto kmod-tcp-bbr ${EXTRA_REQUIRED_PKGS:-}; do
+         libopenssl-devcrypto kmod-tcp-bbr \
+         luci-app-wol luci-i18n-wol-zh-cn \
+         smartdns luci-app-smartdns luci-i18n-smartdns-zh-cn \
+         luci-app-hd-idle luci-i18n-hd-idle-zh-cn \
+         luci-app-upnp luci-i18n-upnp-zh-cn \
+         luci-app-nlbwmon luci-i18n-nlbwmon-zh-cn \
+         sqm-scripts luci-app-sqm luci-i18n-sqm-zh-cn \
+         luci-compat luci-app-accesscontrol luci-i18n-accesscontrol-zh-cn \
+         luci-app-wechatpush luci-i18n-wechatpush-zh-cn \
+         jq bash iputils-arping ${EXTRA_REQUIRED_PKGS:-}; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::配置缺少 ${p}"
     exit 1
