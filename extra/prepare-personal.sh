@@ -605,6 +605,21 @@ uci -q set luci.main.mediaurlbase='/luci-static/mac'
 uci -q commit luci
 exit 0
 LANGTHEME
+# 3.4b 废掉 Argon 自带 uci-defaults 的「抢默认」行为（保留主题注册）
+#     根因：首启 uci-defaults 为并行后台执行（( . file ) & + wait），
+#     Argon 的迁移脚本（2354B）commit 慢、后到——它 commit 时用
+#     自己的 config 快照重写 /etc/config/luci，把 mac 主题先写入的
+#     luci.themes.Mac 注册与 mediaurlbase 全部抹掉。
+#     表现为：默认主题永远 Argon，且主题下拉里没有 Mac 项，
+#     用户手动也无法切换。
+#     处理：用 files 覆盖（prepare_rootfs 在包安装后执行）把
+#     30_luci-theme-argon 替换为只注册、不设默认的空操作版本。
+cat > "$OVL/etc/uci-defaults/30_luci-theme-argon" <<'ARGONFIX'
+#!/bin/sh
+# Argon 主题注册保留（下拉仍可选），默认主题让位给 zzz-0-mac-default
+uci -q set luci.themes.Argon='/luci-static/argon'
+exit 0
+ARGONFIX
 chmod +x "$OVL/etc/uci-defaults/"*
 endg
 
