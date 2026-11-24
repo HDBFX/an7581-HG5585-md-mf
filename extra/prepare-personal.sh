@@ -727,6 +727,8 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          p910nd luci-app-p910nd luci-i18n-p910nd-zh-cn kmod-usb-printer \
          nfs-kernel-server luci-app-nfs luci-i18n-nfs-zh-cn \
          luci-app-store \
+         udpxy luci-app-udpxy luci-i18n-udpxy-zh-cn \
+         adguardhome luci-app-adguardhome luci-i18n-adguardhome-zh-cn \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx kmod-tcp-bbr \
          filebrowser autocore \
