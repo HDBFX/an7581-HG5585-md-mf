@@ -393,6 +393,23 @@ exit 0
 LANGTHEME
 chmod +x "$OVL/etc/uci-defaults/"*
 endg
+# ---------------------------------------------------------------
+# 2.9) luci-theme-mac（macOS 风格主题，仓库自带源码）
+#      基于 luci-theme-bootstrap 模板体系 + Mac 设计语言覆盖层：
+#      SF 字体栈 / 磨砂玻璃顶栏 / 大圆角卡片 / 苹果蓝 / 胶囊按钮 /
+#      暗色跟随系统；uci-defaults 默认启用（Argon/Aurora 保留可切换）。
+# ---------------------------------------------------------------
+group "引入 luci-theme-mac (macOS 风格)"
+TM_SRC="$REPO/extra/luci-theme-mac"
+TM_DST="$SRC/package/luci-theme-mac"
+[ -d "$TM_SRC" ] || { echo "::error::仓库缺少 extra/luci-theme-mac 主题源码"; exit 1; }
+rm -rf "$TM_DST"
+cp -a "$TM_SRC" "$TM_DST"
+grep -q "macOS Style Theme" "$TM_DST/Makefile" || { echo "::error::luci-theme-mac Makefile 异常"; exit 1; }
+find "$TM_DST" -name "*.ut" -o -name "*.css" | wc -l
+echo "luci-theme-mac 已拷入 package/"
+endg
+
 
 # ---------------------------------------------------------------
 # 4) OpenClash 内置核心：Mihomo aarch64 静态二进制
@@ -534,6 +551,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          luci-app-airoha-npu luci-app-qmodem-next qmodem sms-forwarder-next luci-app-openclash \
          luci-app-passwall xray-core luci-app-cpufreq \
          zoneinfo-core zoneinfo-asia \
+         luci-theme-mac \
          luci-theme-aurora luci-app-aurora-config luci-i18n-base-zh-cn \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx \
