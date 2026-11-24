@@ -116,6 +116,28 @@ grep -q 'LUCI_TITLE' "$AC_DIR/Makefile" || { echo "::error::luci-app-accesscontr
 echo "luci-app-accesscontrol 就绪"
 endg
 
+# ---------------------------------------------------------------
+# 2.4d) iStore 应用商店（linkease 官方，ipk/apk 双包管理前端）
+#       linkease/istore 单仓库多包：luci-app-store + taskd 三件套
+#       clone 后拷入 package/。Makefile 已用 $(TOPDIR)/feeds/luci/luci.mk
+#       绝对路径，无需 include 修复；前端 dist 由 Makefile 构建时下载，
+#       界面自带中文。在线装包走 iStore 官方源（用户态包可用）。
+# ---------------------------------------------------------------
+group "引入 iStore 应用商店 (linkease)"
+IS_DIR="$SRC/package/istore"
+if [ ! -f "$IS_DIR/luci-app-store/Makefile" ]; then
+  rm -rf /tmp/istore-src
+  git clone --depth 1 https://github.com/linkease/istore.git /tmp/istore-src || { echo "::error::istore 克隆失败"; exit 1; }
+  mkdir -p "$IS_DIR"
+  for pkg in luci-app-store luci-lib-taskd luci-lib-xterm taskd; do
+    cp -a "/tmp/istore-src/luci/$pkg" "$IS_DIR/" || { echo "::error::istore 拷入 $pkg 失败"; exit 1; }
+  done
+  rm -rf /tmp/istore-src
+  echo "--- iStore 包目录 ---"
+  ls "$IS_DIR"
+fi
+endg
+
 # 2.4c) autocore 重新引入：fork 主页温度/频率/架构 rpcd 读数的 ACL（luci-mod-status-autocore.json）
 #       与 /sbin/cpuinfo、/sbin/tempinfo 都由该包提供，个人版此前误删导致概览页三项显示 ?；
 #       包本身是纯脚本（含与 overlay 同名文件，overlay files/ 优先级更高，无冲突）
@@ -678,6 +700,11 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          luci-app-openclash luci-app-passwall luci-i18n-base-zh-cn luci-theme-argon \
          xray-core \
          zoneinfo-core zoneinfo-asia \
+         luci-app-librespeed librespeed-go \
+         zerotier luci-app-zerotier luci-i18n-zerotier-zh-cn \
+         p910nd luci-app-p910nd luci-i18n-p910nd-zh-cn kmod-usb-printer \
+         nfs-kernel-server luci-app-nfs luci-i18n-nfs-zh-cn \
+         luci-app-store \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx kmod-tcp-bbr \
          filebrowser autocore \
