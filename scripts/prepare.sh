@@ -163,6 +163,26 @@ group "注入机型定制 ($MODEL)"
 OVL="$SRC/files"
 mkdir -p "$OVL/etc/uci-defaults" "$OVL/etc/openclash/core"
 
+# ---------------------------------------------------------------
+# 3.0 默认时区：中国标准时间（Asia/Shanghai UTC+8）+ 国内 NTP
+#     LuCI 时区下拉依赖 zoneinfo 数据包（seed 提供 core+asia）；
+#     时间准确是 VMess/TLS 代理握手的前提。
+# ---------------------------------------------------------------
+cat > "$OVL/etc/uci-defaults/99-timezone" <<'TZ'
+#!/bin/sh
+uci -q set system.@system[0].timezone='CST-8'
+uci -q set system.@system[0].zonename='Asia/Shanghai'
+uci -q delete system.ntp
+uci -q set system.ntp=timeserver
+uci -q set system.ntp.enabled='1'
+uci -q add_list system.ntp.server='ntp.aliyun.com'
+uci -q add_list system.ntp.server='ntp.tencent.com'
+uci -q add_list system.ntp.server='cn.pool.ntp.org'
+uci -q commit system
+exit 0
+TZ
+
+
 # 3.4 概览页频率/温度显示：LuCI 状态页通过 /sbin/cpuinfo、/sbin/tempinfo 读数。
 #     autocore 只在 ipq*/mediatek*/qualcommax* 安装这两个脚本，airoha 不在其列，
 #     因此直接从本仓库 overlay 注入，不引入 autocore 包、不改 .config。
@@ -513,6 +533,7 @@ fi
 for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
          luci-app-airoha-npu luci-app-qmodem-next qmodem sms-forwarder-next luci-app-openclash \
          luci-app-passwall xray-core luci-app-cpufreq \
+         zoneinfo-core zoneinfo-asia \
          luci-theme-aurora luci-app-aurora-config luci-i18n-base-zh-cn \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx \

@@ -97,6 +97,26 @@ group "注入机型定制 ($MODEL)"
 OVL="$SRC/files"
 mkdir -p "$OVL/etc/uci-defaults"
 
+# ---------------------------------------------------------------
+# 3.0 默认时区：中国标准时间（Asia/Shanghai UTC+8）+ 国内 NTP
+#     LuCI 时区下拉依赖 zoneinfo 数据包（seed 提供 core+asia）；
+#     时间准确是 VMess/TLS 代理握手的前提。
+# ---------------------------------------------------------------
+cat > "$OVL/etc/uci-defaults/99-timezone" <<'TZ'
+#!/bin/sh
+uci -q set system.@system[0].timezone='CST-8'
+uci -q set system.@system[0].zonename='Asia/Shanghai'
+uci -q delete system.ntp
+uci -q set system.ntp=timeserver
+uci -q set system.ntp.enabled='1'
+uci -q add_list system.ntp.server='ntp.aliyun.com'
+uci -q add_list system.ntp.server='ntp.tencent.com'
+uci -q add_list system.ntp.server='cn.pool.ntp.org'
+uci -q commit system
+exit 0
+TZ
+
+
 # 3.1 概览页频率/温度显示：数据源脚本 /sbin/cpuinfo、/sbin/tempinfo 由 autocore 包
 #     与本仓库 overlay 双保险提供（overlay 优先），rpcd ACL 也由 autocore 提供，
 #     缺它概览页温度/频率/架构会显示 ?
@@ -470,7 +490,7 @@ fi
 # ---------------------------------------------------------------
 group "校验个人光猫专版包集合"
 # 正向：必须全部入选（PON/ONU 核心 + NPU/超频 + 中文 + BBR）
-for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
+for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug zoneinfo-core zoneinfo-asia \
          luci-app-airoha-npu \
          luci-i18n-base-zh-cn kmod-tcp-bbr autocore; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
