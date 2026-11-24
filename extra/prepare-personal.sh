@@ -138,6 +138,26 @@ if [ ! -f "$IS_DIR/luci-app-store/Makefile" ]; then
 fi
 endg
 
+# ---------------------------------------------------------------
+# 2.4e) luci-theme-mac（macOS 风格主题 / iOS 27 Liquid Glass v2）
+#       源码独立维护在 luxinxin0378-create/opmacos-（主题可单独拉取安装，
+#       此处为个人版固件内置集成）：ucode 模板三件套 + cascade.css
+#       磨砂玻璃/SF 字体栈/大圆角卡片/暗色跟随系统；
+#       包自带 30_luci-theme-mac uci-defaults，99-lang-theme 最终设为默认。
+# ---------------------------------------------------------------
+group "引入 luci-theme-mac (macOS 风格 / Liquid Glass v2)"
+TM_DST="$SRC/package/luci-theme-mac"
+rm -rf /tmp/opmacos-theme "$TM_DST"
+git clone --depth 1 https://github.com/luxinxin0378-create/opmacos-.git /tmp/opmacos-theme || {
+  echo "::error::opmacos- 主题仓库克隆失败"; exit 1; }
+cp -a /tmp/opmacos-theme/. "$TM_DST/" || { echo "::error::luci-theme-mac 拷入失败"; exit 1; }
+rm -rf /tmp/opmacos-theme "$TM_DST/.git"
+grep -q "macOS Style Theme" "$TM_DST/Makefile" || { echo "::error::luci-theme-mac Makefile 异常"; exit 1; }
+[ -f "$TM_DST/ucode/template/themes/mac/header.ut" ] || { echo "::error::主题 ucode 模板缺失"; exit 1; }
+echo "--- luci-theme-mac (Liquid Glass v2) 文件 ---"
+find "$TM_DST" -type f | sed "s|$TM_DST/||"
+endg
+
 # 2.4c) autocore 重新引入：fork 主页温度/频率/架构 rpcd 读数的 ACL（luci-mod-status-autocore.json）
 #       与 /sbin/cpuinfo、/sbin/tempinfo 都由该包提供，个人版此前误删导致概览页三项显示 ?；
 #       包本身是纯脚本（含与 overlay 同名文件，overlay files/ 优先级更高，无冲突）
@@ -576,11 +596,12 @@ uci commit sms_forwarder
 exit 0
 SMSF
 
-# 3.4 默认简体中文 + 默认主题 Argon（99- 前缀保证开机最后执行覆盖）
+# 3.4 默认简体中文 + 默认主题 mac（macOS 风格 Liquid Glass；Argon 保留可切换）
+#     99- 前缀保证在主题包自带 30_luci-theme-mac 之后执行覆盖
 cat > "$OVL/etc/uci-defaults/99-lang-theme" <<'LANGTHEME'
 #!/bin/sh
 uci -q set luci.main.lang='zh_cn'
-uci -q set luci.main.mediaurlbase='/luci-static/argon'
+uci -q set luci.main.mediaurlbase='/luci-static/mac'
 uci -q commit luci
 exit 0
 LANGTHEME
@@ -698,6 +719,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          sms-forwarder-next \
          luci-app-airoha-npu \
          luci-app-openclash luci-app-passwall luci-i18n-base-zh-cn luci-theme-argon \
+         luci-theme-mac \
          xray-core \
          zoneinfo-core zoneinfo-asia \
          luci-app-librespeed librespeed-go \
