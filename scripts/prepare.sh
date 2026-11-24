@@ -547,6 +547,8 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          sqm-scripts luci-app-sqm luci-i18n-sqm-zh-cn \
          luci-compat luci-app-accesscontrol luci-i18n-accesscontrol-zh-cn \
          luci-app-wechatpush luci-i18n-wechatpush-zh-cn \
+         udpxy luci-app-udpxy luci-i18n-udpxy-zh-cn \
+         adguardhome luci-app-adguardhome luci-i18n-adguardhome-zh-cn \
          jq bash iputils-arping ${EXTRA_REQUIRED_PKGS:-}; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::配置缺少 ${p}"
