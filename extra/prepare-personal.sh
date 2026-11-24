@@ -707,6 +707,51 @@ if [ "$SUBTARGET" = "an7583" ]; then
 fi
 
 # ---------------------------------------------------------------
+# sysupgrade 元数据兼容修复：补全 image SUPPORTED_DEVICES
+# ---------------------------------------------------------------
+group "补全 image supported_devices（恢复系统内保留配置升级）"
+# fwtool_check_image（an7581/an7583 subtarget 均 REQUIRE_IMAGE_METADATA=1）
+# 用板子 DTS compatible（/tmp/sysinfo/board_name）比对镜像 metadata 的
+# supported_devices。上游定义与之错位：
+#   - fiberhome/nokia 各变体交叉写了对方的名字（不含自身 compatible）
+#   - h3c_hm2004-du 与 an7583 的 mf/mf-ubi 完全未定义 SUPPORTED_DEVICES
+#     （append-metadata 因条件为假不写 metadata）
+# 结果：系统内（LuCI/sysupgrade）升级一律报
+#   「Device not supported by this image」/「Image metadata not present」
+# 被拒，只能走 U-Boot/recovery 引导刷写。补全后系统内保留配置升级恢复。
+MK1="target/linux/airoha/image/an7581.mk"
+MK2="target/linux/airoha/image/an7583.mk"
+[ -f "$MK1" ] && [ -f "$MK2" ] || { echo "::error::缺少 airoha image 定义文件"; exit 1; }
+sed -i \
+  -e 's|^  SUPPORTED_DEVICES += fiberhome,hg5585f-ct-usb-sfp$|&\n  SUPPORTED_DEVICES += fiberhome,hg5585f-ct|' \
+  -e 's|^  SUPPORTED_DEVICES += fiberhome,hg5585f-ct$|&\n  SUPPORTED_DEVICES += fiberhome,hg5585f-ct-usb-sfp|' \
+  -e 's|^  SUPPORTED_DEVICES += fiberhome,hg5585f-cu-usb-sfp$|&\n  SUPPORTED_DEVICES += fiberhome,hg5585f-cu|' \
+  -e 's|^  SUPPORTED_DEVICES += fiberhome,hg5585f-cu$|&\n  SUPPORTED_DEVICES += fiberhome,hg5585f-cu-usb-sfp|' \
+  -e 's|^  SUPPORTED_DEVICES += nokia,xg-040g-md-ubi-usb-sfp$|&\n  SUPPORTED_DEVICES += nokia,xg-040g-md-ubi|' \
+  -e 's|^  SUPPORTED_DEVICES += nokia,xg-040g-md-ubi$|&\n  SUPPORTED_DEVICES += nokia,xg-040g-md-ubi-usb-sfp|' \
+  -e 's|^  DEVICE_DTS := an7581-h3c-hm2004-du$|&\n  SUPPORTED_DEVICES += h3c,hm2004-du|' \
+  "$MK1"
+sed -i \
+  -e 's|^  DEVICE_DTS := an7583-nokia_xg-040g-mf-ubi$|&\n  SUPPORTED_DEVICES += nokia,xg-040g-mf-ubi|' \
+  -e 's|^  DEVICE_DTS := an7583-nokia_xg-040g-mf$|&\n  SUPPORTED_DEVICES += nokia,xg-040g-mf|' \
+  "$MK2"
+for dev in fiberhome,hg5585f-ct fiberhome,hg5585f-ct-usb-sfp \
+           fiberhome,hg5585f-cu fiberhome,hg5585f-cu-usb-sfp \
+           nokia,xg-040g-md-ubi nokia,xg-040g-md-ubi-usb-sfp \
+           h3c,hm2004-du; do
+  grep -q "^  SUPPORTED_DEVICES += ${dev}\$" "$MK1" || {
+    echo "::error::AN7581 supported_devices 补全失败: ${dev}"; exit 1
+  }
+done
+for dev in nokia,xg-040g-mf nokia,xg-040g-mf-ubi; do
+  grep -q "^  SUPPORTED_DEVICES += ${dev}\$" "$MK2" || {
+    echo "::error::AN7583 supported_devices 补全失败: ${dev}"; exit 1
+  }
+done
+echo "supported_devices 补全完成（AN7581 +7 / AN7583 +2）"
+endg
+
+# ---------------------------------------------------------------
 # 6) 严格校验：个人精简版正反向双向校验
 # ---------------------------------------------------------------
 group "校验个人精简版包集合"
