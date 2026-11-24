@@ -1,7 +1,7 @@
 name: 诊断 kconfig（临时，用完即删）
 
-# 复现 prepare-personal.sh 前半段（feeds + defconfig），dump printer 相关
-# kconfig 中间产物，定位 kmod-usb-printer 被静默丢弃的根因
+# 复现 prepare-personal.sh 前半段（feeds + defconfig），dump istore 相关
+# 元数据与 kconfig 符号，定位 luci-app-store 被静默丢弃的根因
 on:
   workflow_dispatch:
 
@@ -13,31 +13,30 @@ jobs:
       - name: 检出本仓库
         uses: actions/checkout@v4
 
-      - name: 复现 prepare 前半段（feeds + defconfig，校验失败不阻塞）
+      - name: 复现 prepare 前半段（校验失败不阻塞）
         run: |
           bash extra/prepare-personal.sh xg-040g-md nokia_xg-040g-md-ubi an7581 || true
 
-      - name: dump kconfig 诊断
+      - name: dump istore 诊断
         if: always()
         run: |
           cd ponwrt
-          echo "========== 1. 最终 .config printer/hardware 相关 =========="
-          grep -iE "printer|hardware" .config || echo "(.config 无匹配)"
-          echo "========== 2. .config-package.in: PACKAGE_printer-support 定义 =========="
-          grep -n -B2 -A18 "config PACKAGE_printer-support$" tmp/.config-package.in || echo "(无条目)"
-          echo "========== 3. .config-package.in: PACKAGE_kmod-usb-printer 定义 =========="
-          grep -n -B2 -A18 "config PACKAGE_kmod-usb-printer$" tmp/.config-package.in || echo "(无条目)"
-          echo "========== 4. .packageinfo: printer-support 元数据 =========="
-          grep -B3 -A14 "^Package: printer-support$" tmp/.packageinfo || echo "(无)"
-          echo "========== 5. .packageinfo: kmod-usb-printer 元数据 =========="
-          grep -B3 -A20 "^Package: kmod-usb-printer$" tmp/.packageinfo || echo "(无)"
-          echo "========== 6. p910nd 元数据（对照组）=========="
-          grep -B3 -A10 "^Package: p910nd$" tmp/.packageinfo | head -20 || echo "(无)"
-          echo "========== 7. hardware-support Makefile 实际内容 =========="
-          sed -n '1,35p' package/system/hardware-support/Makefile 2>/dev/null || echo "(文件不存在)"
-          echo "========== 8. usb.mk usb-printer 段实际内容 =========="
-          grep -A8 "KernelPackage/usb-printer$" package/kernel/linux/modules/usb.mk 2>/dev/null || echo "(无)"
-          echo "========== 9. 实验 A：只显式开 printer-support =========="
+          echo "========== 1. 最终 .config istore 相关 =========="
+          grep -iE "istore|taskd|xterm" .config || echo "(.config 无匹配)"
+          echo "========== 2. .config-package.in: istore 四包定义 =========="
+          grep -n -A6 "config PACKAGE_luci-app-store$" tmp/.config-package.in || echo "(无 luci-app-store 符号)"
+          grep -n -A6 "config PACKAGE_taskd$" tmp/.config-package.in || echo "(无 taskd 符号)"
+          grep -n -A6 "config PACKAGE_luci-lib-taskd$" tmp/.config-package.in || echo "(无 luci-lib-taskd 符号)"
+          grep -n -A6 "config PACKAGE_luci-lib-xterm$" tmp/.config-package.in || echo "(无 luci-lib-xterm 符号)"
+          echo "========== 3. 元数据 .packageinfo: istore 四包 =========="
+          grep -B4 -A14 "^Package: luci-app-store$" tmp/.packageinfo || echo "(无 luci-app-store 元数据)"
+          grep -B4 -A12 "^Package: taskd$" tmp/.packageinfo || echo "(无 taskd 元数据)"
+          echo "========== 4. 拷入的 iStore 目录结构 =========="
+          find package/istore -name "Makefile" | head; echo "---"
+          head -30 package/istore/luci-app-store/Makefile 2>/dev/null || echo "(Makefile 不存在)"
+          echo "========== 5. 元数据生成阶段是否收录 istore =========="
+          grep -c "istore" tmp/.packageinfo 2>/dev/null || echo "0"
+          echo "========== 6. 实验：显式开 luci-app-store =========="
           {
             echo "CONFIG_TARGET_airoha=y"
             echo "CONFIG_TARGET_airoha_an7581=y"
@@ -45,11 +44,11 @@ jobs:
             echo 'CONFIG_TARGET_SUBTARGET="an7581"'
             echo 'CONFIG_TARGET_ROOTFS_SQUASHFS=y'
             echo 'CONFIG_TARGET_airoha_an7581_DEVICE_nokia_xg-040g-md-ubi=y'
-            echo 'CONFIG_PACKAGE_printer-support=y'
+            echo 'CONFIG_PACKAGE_luci-app-store=y'
           } > .config
           make defconfig >/dev/null 2>&1
-          grep -E "^# CONFIG_PACKAGE_(printer-support|kmod-usb-printer)|^CONFIG_PACKAGE_(printer-support|kmod-usb-printer)" .config
-          echo "========== 10. 实验 B：只显式开 kmod-usb-printer =========="
+          grep -E "^# CONFIG_PACKAGE_luci-app-store|^CONFIG_PACKAGE_luci-app-store" .config || echo "(符号完全消失)"
+          echo "========== 7. 实验：四包全开 =========="
           {
             echo "CONFIG_TARGET_airoha=y"
             echo "CONFIG_TARGET_airoha_an7581=y"
@@ -57,20 +56,10 @@ jobs:
             echo 'CONFIG_TARGET_SUBTARGET="an7581"'
             echo 'CONFIG_TARGET_ROOTFS_SQUASHFS=y'
             echo 'CONFIG_TARGET_airoha_an7581_DEVICE_nokia_xg-040g-md-ubi=y'
-            echo 'CONFIG_PACKAGE_kmod-usb-printer=y'
+            echo 'CONFIG_PACKAGE_luci-app-store=y'
+            echo 'CONFIG_PACKAGE_luci-lib-taskd=y'
+            echo 'CONFIG_PACKAGE_luci-lib-xterm=y'
+            echo 'CONFIG_PACKAGE_taskd=y'
           } > .config
           make defconfig >/dev/null 2>&1
-          grep -E "^# CONFIG_PACKAGE_(printer-support|kmod-usb-printer)|^CONFIG_PACKAGE_(printer-support|kmod-usb-printer)" .config
-          echo "========== 11. 实验 C：都开 =========="
-          {
-            echo "CONFIG_TARGET_airoha=y"
-            echo "CONFIG_TARGET_airoha_an7581=y"
-            echo 'CONFIG_TARGET_BOARD="airoha"'
-            echo 'CONFIG_TARGET_SUBTARGET="an7581"'
-            echo 'CONFIG_TARGET_ROOTFS_SQUASHFS=y'
-            echo 'CONFIG_TARGET_airoha_an7581_DEVICE_nokia_xg-040g-md-ubi=y'
-            echo 'CONFIG_PACKAGE_printer-support=y'
-            echo 'CONFIG_PACKAGE_kmod-usb-printer=y'
-          } > .config
-          make defconfig >/dev/null 2>&1
-          grep -E "^# CONFIG_PACKAGE_(printer-support|kmod-usb-printer)|^CONFIG_PACKAGE_(printer-support|kmod-usb-printer)" .config
+          grep -E "^# CONFIG_PACKAGE_(luci-app-store|luci-lib-taskd|luci-lib-xterm|taskd)|^CONFIG_PACKAGE_(luci-app-store|luci-lib-taskd|luci-lib-xterm|taskd)" .config
