@@ -555,6 +555,39 @@ uci commit network
 exit 0
 LAN25G
 
+# 2.4b) zte WAN 口：eth1 独立 WAN（DHCP 协议），防火墙加入 wan 区
+#   设备布局（md/mf）：eth0/eth1 = 1G GMAC，lan1 = 2.5G GMAC。
+#   上游兜底只桥 eth0，lan1 由 97-lan25g-bridge 并入 br-lan，
+#   eth1 默认空闲 → 配为独立 DHCP WAN（接上级光猫/路由）。
+#   幂等保护：无 eth1 的机型自动跳过；eth1 若已被桥收编先移除；
+#   firewall wan 区按 name 动态定位，不依赖 zone 索引。
+cat > "$OVL/etc/uci-defaults/98-zte-wan" <<'ZTEWAN'
+#!/bin/sh
+[ -e /sys/class/net/eth1 ] || exit 0
+for d in $(uci -q show network | sed -n 's/^network\.\([^.=]*\)=device$/\1/p'); do
+  [ "$(uci -q get network.$d.name)" = "br-lan" ] || continue
+  case " $(uci -q get network.$d.ports 2>/dev/null) " in
+    *" eth1 "*) uci del_list network.$d.ports='eth1' ;;
+  esac
+done
+uci -q batch <<UCIB
+set network.zte=interface
+set network.zte.proto='dhcp'
+set network.zte.device='eth1'
+set network.zte.force_link='0'
+UCIB
+WIDX=$(uci show firewall 2>/dev/null | sed -n "s/^firewall\.@zone\[\([0-9]*\)\]\.name='wan'.*/\1/p" | head -1)
+if [ -n "$WIDX" ]; then
+  case " $(uci -q get firewall.@zone[$WIDX].network) " in
+    *" zte "*) ;;
+    *) uci add_list firewall.@zone[$WIDX].network='zte' ;;
+  esac
+fi
+uci commit network
+uci commit firewall
+exit 0
+ZTEWAN
+
 # 3.35 QModem v3.2.0 rpcd 加载链修复：rpcd 分发脚本漏加载 cmds/<vendor>.sh，
 #     quectel 专属 cmd_*（型号/制造商/固件版本/温度/电压）函数不存在 →
 #     概览页 base_info 只剩 AT端口/连接状态。幂等补丁：已含加载行自动跳过。
