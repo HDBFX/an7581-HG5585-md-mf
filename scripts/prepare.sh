@@ -85,7 +85,7 @@ endg
 # 2.5) Aurora 主题 + 配置插件（第三方，不在 immortalwrt/luci 里）
 #      eamonxg 的两个仓库（主题 + 配置插件）根目录都是标准 package 结构，
 #      clone 后整体拷进 package/。主题要求 OpenWrt 23.05+（ucode LuCI），
-#      本源码树满足；包自带 30_luci-theme-aurora 首次启动设默认，
+#      本源码树满足；其 30- uci-defaults 的抢默认行为已在 3.4a 用 files 覆盖废掉（保留注册）。
 #      99-lang-theme 再兜底。配置插件提供 5 套预设 / 明暗色板 / 布局自定义。
 # ---------------------------------------------------------------
 group "引入 Aurora 主题与配置插件"
@@ -108,6 +108,26 @@ grep -q 'LuCI configuration UI for the Aurora theme' "$AURORA_CFG_DIR/Makefile" 
   echo "::error::Aurora 配置插件源码不完整"
   exit 1
 }
+endg
+
+# ---------------------------------------------------------------
+# 2.5a) luci-theme-mac（macOS 风格主题 / iOS 液态玻璃）
+#       源码独立维护在 luxinxin0378-create/opmacos-（个人版固件同款）：
+#       ucode 模板三件套 + cascade.css 液态玻璃/SF 字体栈/大圆角卡片/
+#       暗色跟随系统；设为默认主题，Aurora 保留可切换。
+#       包自带 30_luci-theme-mac uci-defaults，99-lang-theme 最终设默认。
+# ---------------------------------------------------------------
+group "引入 luci-theme-mac (macOS 风格 / Liquid Glass)"
+TM_DST="$SRC/package/luci-theme-mac"
+rm -rf /tmp/opmacos-theme "$TM_DST"
+git clone --depth 1 https://github.com/luxinxin0378-create/opmacos-.git /tmp/opmacos-theme || {
+  echo "::error::opmacos- 主题仓库克隆失败"; exit 1; }
+cp -a /tmp/opmacos-theme/. "$TM_DST/" || { echo "::error::luci-theme-mac 拷入失败"; exit 1; }
+rm -rf /tmp/opmacos-theme "$TM_DST/.git"
+grep -q "macOS Style Theme" "$TM_DST/Makefile" || { echo "::error::luci-theme-mac Makefile 异常"; exit 1; }
+[ -f "$TM_DST/ucode/template/themes/mac/header.ut" ] || { echo "::error::主题 ucode 模板缺失"; exit 1; }
+echo "--- luci-theme-mac (Liquid Glass) 文件 ---"
+find "$TM_DST" -type f | sed "s|$TM_DST/||"
 endg
 
 # ---------------------------------------------------------------
@@ -364,8 +384,8 @@ esac
 # 3.4 默认简体中文 + 默认主题（uci-defaults 开机首次执行，99- 前缀保证最后覆盖）
 #     dispatcher 读取 luci.main.lang：'zh_cn' 会被转成 'zh-cn' 去加载
 #     /usr/lib/lua/luci/i18n/*.zh-cn.lmo（由 luci-i18n-*-zh-cn 包提供）。
-#     Aurora 包自带 30_luci-theme-aurora 首次安装会设默认，这里 99- 兜底
-#     （显式把 mediaurlbase 指向 aurora，防止任何旧值残留）。
+#     默认主题 mac（见 99-lang-theme）；Aurora 包自带的 30- 脚本
+#     会抢设 aurora 默认，已在下方 3.4a 用 files 覆盖废掉（只注册）。
 # 3.5 远程访问：ddnsto 内网穿透（首次开机离线安装三件套并注册自启）
 cat > "$OVL/etc/uci-defaults/99-ddnsto" <<'TS'
 #!/bin/sh
@@ -383,11 +403,28 @@ fi
 exit 0
 TS
 
+# 3.4a 废掉 Aurora 自带 uci-defaults 的「抢默认」行为（保留主题注册）
+#     根因同个人版 Argon race：首启 uci-defaults 为并行后台执行，
+#     Aurora 的 30- 脚本内含 mediaurlbase=/luci-static/aurora，
+#     它 commit 慢、后到时会用旧快照把 mac 默认主题整个抹掉，
+#     表现为首启默认主题随机变成 Aurora 且主题切换失效。
+#     处理：files 覆盖 30_luci-theme-aurora 为「只注册、不设默认」版，
+#     默认主题统一由 99-lang-theme 指定为 mac。
+cat > "$OVL/etc/uci-defaults/30_luci-theme-aurora" <<'AURORAFIX'
+#!/bin/sh
+uci get luci.themes.Aurora >/dev/null 2>&1 || \
+uci batch <<-EOF
+	set luci.themes.Aurora=/luci-static/aurora
+	commit luci
+EOF
+exit 0
+AURORAFIX
+
 cat > "$OVL/etc/uci-defaults/99-lang-theme" <<LANGTHEME
 #!/bin/sh
 uci -q set luci.main.lang='zh_cn'
-uci -q set luci.themes.Aurora='/luci-static/aurora'
-uci -q set luci.main.mediaurlbase='/luci-static/aurora'
+uci -q set luci.themes.Mac='/luci-static/mac'
+uci -q set luci.main.mediaurlbase='/luci-static/mac'
 uci -q commit luci
 exit 0
 LANGTHEME
@@ -579,7 +616,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          luci-app-airoha-npu luci-app-qmodem-next qmodem sms-forwarder-next luci-app-openclash \
          luci-app-passwall xray-core luci-app-cpufreq \
          zoneinfo-core zoneinfo-asia \
-         luci-theme-aurora luci-app-aurora-config luci-i18n-base-zh-cn \
+         luci-theme-mac luci-theme-aurora luci-app-aurora-config luci-i18n-base-zh-cn \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx \
          autocore kmod-crypto-hw-eip93 kmod-cryptodev openssl-util \
@@ -629,7 +666,7 @@ if ! grep -q "^CONFIG_LUCI_LANG_zh_Hans=y$" .config; then
   echo "::error::缺少 CONFIG_LUCI_LANG_zh_Hans，中文翻译包不会生效"
   exit 1
 fi
-echo "关键包校验通过（含中文 / Aurora 主题）"
+echo "关键包校验通过（含中文 / mac + Aurora 主题）"
 grep -E '^CONFIG_TARGET_(BOARD|SUBTARGET|PROFILE)' .config
 endg
 
