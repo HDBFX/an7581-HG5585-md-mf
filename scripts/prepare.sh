@@ -172,6 +172,34 @@ echo "luci-app-accesscontrol 就绪"
 endg
 
 # ---------------------------------------------------------------
+# 2.7) luci-app-airoha-npu 覆盖为 rchen14b 版（带 CPU PLL 超频）
+#      feeds 里的同名包为 naoki66 版，CPU 超频能力不明；rchen14b 版
+#      （v1.0.1）明确带 AIROHA_OC_MAX_MHZ 上限配置 + devmem PLL 直写
+#      （500-1600MHz，与 ATF BL31 en7523_armpll_set 同法），
+#      AN7581/AN7583 双 SoC 检测（compatible 优先，chip-id 回退），
+#      与个人版同源。package/ 目录优先级高于 feeds，直接同名覆盖。
+# ---------------------------------------------------------------
+group "覆盖 luci-app-airoha-npu 为 rchen14b 版 (PLL 超频)"
+NPU_DIR="$SRC/package/luci-app-airoha-npu"
+rm -rf /tmp/airoha-npu-src "$NPU_DIR"
+git clone --depth 1 https://github.com/rchen14b/luci-app-airoha-npu.git /tmp/airoha-npu-src || {
+  echo "::error::rchen14b/luci-app-airoha-npu 克隆失败"; exit 1; }
+mkdir -p "$NPU_DIR"
+cp -a /tmp/airoha-npu-src/. "$NPU_DIR/"
+rm -rf /tmp/airoha-npu-src
+# 确认后端带超频实现（AIROHA_OC_MAX_MHZ 上限配置 + devmem PLL 写入）
+grep -q 'AIROHA_OC_MAX_MHZ' "$NPU_DIR/root/usr/libexec/rpcd/luci.airoha_npu" || {
+  echo "::error::该版本不含 CPU 超频实现（AIROHA_OC_MAX_MHZ），请检查仓库"
+  exit 1
+}
+grep -q 'devmem' "$NPU_DIR/root/usr/libexec/rpcd/luci.airoha_npu" || {
+  echo "::error::该版本后端缺 devmem 超频路径，请检查仓库"
+  exit 1
+}
+echo "luci-app-airoha-npu 已覆盖为 rchen14b 版（含 PLL 超频 500-1600MHz）"
+endg
+
+# ---------------------------------------------------------------
 # 3) 机型定制（OpenWrt files/ overlay，直接编进 rootfs）
 # ---------------------------------------------------------------
 group "注入机型定制 ($MODEL)"
