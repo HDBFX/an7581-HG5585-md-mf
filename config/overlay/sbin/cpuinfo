@@ -1,8 +1,9 @@
 #!/bin/sh
 # LuCI 概览页「Architecture」数据源：rpcd 调用 /sbin/cpuinfo
 # 输出形如：ARMv8 Processor rev 4 x 4 (1300MHz, 46.2°C)
+# 频率走 /sbin/cpufreq_real：PLL 寄存器直读优先（真值，含 luci-app-airoha-npu
+# 的 PLL 直写超频——cpufreq sysfs 感知不到寄存器直写），cpufreq sysfs 兜底。
 CPUINFO="/proc/cpuinfo"
-CPUFREQ="/sys/devices/system/cpu/cpufreq"
 THERMAL="/sys/class/thermal/thermal_zone0/temp"
 
 arch="$(awk -F': ' '/^model name/ {print $2; exit}' "$CPUINFO")"
@@ -14,13 +15,9 @@ cores="$(grep -c '^processor' "$CPUINFO")"
 [ "$cores" -ge 1 ] 2>/dev/null || cores=1
 
 freq=""
-for f in "$CPUFREQ/policy0/cpuinfo_cur_freq" "$CPUFREQ/policy0/scaling_cur_freq" \
-         "$CPUFREQ/cpu0/cpuinfo_cur_freq"; do
-	if [ -r "$f" ]; then
-		freq="$(awk '{printf "%.0fMHz", $1 / 1000}' "$f")"
-		break
-	fi
-done
+freqk="$(/sbin/cpufreq_real 2>/dev/null)"
+case "$freqk" in ''|*[!0-9]*) freqk="" ;; esac
+[ -n "$freqk" ] && freq="$(awk -v k="$freqk" 'BEGIN{printf "%.0fMHz", k / 1000}')"
 
 temp=""
 if [ -r "$THERMAL" ]; then
