@@ -71,7 +71,6 @@ src-git telephony https://github.com/openwrt/telephony.git
 src-git video https://github.com/openwrt/video.git
 src-git pon_drivers https://github.com/pbs05/openwrt-pon-drivers.git
 src-git onu https://github.com/naoki66/OpenWrt_ONU_CONFIG.git;main
-src-git airoha https://github.com/naoki66/luci-app-airoha.git;main
 src-git qmodem https://github.com/FUjr/QModem.git;main
 src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git
 src-git passwall https://github.com/Openwrt-Passwall/openwrt-passwall.git
