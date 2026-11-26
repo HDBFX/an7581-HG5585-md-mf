@@ -1,0 +1,53 @@
+#!/bin/sh
+# 输出 CPU 实时频率（kHz 纯数字），供 /sbin/cpuinfo（rpcd）与概览页 JS 调用。
+# PLL 寄存器直读为真值：luci-app-airoha-npu 的 PLL 直写超频（devmem 改
+# CR_CPUPLL 寄存器）不会反映在 cpufreq sysfs 里——框架记录的还是旧档位，
+# 只有读寄存器反算才能拿到实况频率。devmem 不可用时回退 cpufreq sysfs。
+# 算法与 luci-app-airoha-npu 后端 read_armpll_mhz() 一致：
+#   AN7581: PCW @0x1fa202b4 bits31:24；POSDIV @0x1fa202b8 bits6:4
+#   AN7583: PCW @0x1fa202ac bits31:24；POSDIV @0x1fa202b8 bits20:18
+#   posdiv=0 → 频率=PCW*50MHz；posdiv=1 → 频率=PCW*25MHz
+
+pll_khz() {
+	command -v devmem >/dev/null 2>&1 || return 1
+	[ -c /dev/mem ] || return 1
+
+	local soc="an7581"
+	tr '\0' '\n' < /proc/device-tree/compatible 2>/dev/null \
+		| grep -qE 'an7583|en7583' && soc="an7583"
+
+	local pcw_reg posdiv_reg posdiv_shift
+	case "$soc" in
+		an7583) pcw_reg=0x1fa202ac; posdiv_reg=0x1fa202b8; posdiv_shift=18 ;;
+		*)      pcw_reg=0x1fa202b4; posdiv_reg=0x1fa202b8; posdiv_shift=4  ;;
+	esac
+
+	local pcw_raw posdiv_raw pcw posdiv
+	pcw_raw=$(devmem "$pcw_reg" 2>/dev/null | tr -d '[:space:]')
+	posdiv_raw=$(devmem "$posdiv_reg" 2>/dev/null | tr -d '[:space:]')
+	case "$pcw_raw" in 0x*) ;; *) return 1 ;; esac
+	case "$posdiv_raw" in 0x*) ;; *) return 1 ;; esac
+
+	pcw=$(( ($pcw_raw >> 24) & 0xff ))
+	posdiv=$(( ($posdiv_raw >> $posdiv_shift) & 0x7 ))
+
+	case "$posdiv" in
+		0) [ "$pcw" -gt 0 ] 2>/dev/null || return 1; echo $((pcw * 50 * 1000)) ;;
+		1) [ "$pcw" -gt 0 ] 2>/dev/null || return 1; echo $((pcw * 25 * 1000)) ;;
+		*) return 1 ;;
+	esac
+}
+
+cpufreq_khz() {
+	local f v
+	for f in /sys/devices/system/cpu/cpufreq/policy0/cpuinfo_cur_freq \
+			/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq \
+			/sys/devices/system/cpu/cpufreq/cpu0/cpuinfo_cur_freq; do
+		[ -r "$f" ] || continue
+		v=$(cat "$f" 2>/dev/null | tr -d '[:space:]')
+		case "$v" in ''|*[!0-9]*) ;; *) [ "$v" -gt 0 ] 2>/dev/null && { echo "$v"; return 0; } ;; esac
+	done
+	return 1
+}
+
+pll_khz || cpufreq_khz || exit 1
