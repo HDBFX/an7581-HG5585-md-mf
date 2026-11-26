@@ -111,23 +111,18 @@ grep -q 'LuCI configuration UI for the Aurora theme' "$AURORA_CFG_DIR/Makefile" 
 endg
 
 # ---------------------------------------------------------------
-# 2.5a) luci-theme-mac（macOS 风格主题 / iOS 液态玻璃）
-#       源码独立维护在 luxinxin0378-create/opmacos-（个人版固件同款）：
-#       ucode 模板三件套 + cascade.css 液态玻璃/SF 字体栈/大圆角卡片/
-#       暗色跟随系统；设为默认主题，Aurora 保留可切换。
-#       包自带 30_luci-theme-mac uci-defaults，99-lang-theme 最终设默认。
+# 2.5a) 主题策略（2026-11-26 调整）：mac 主题整体移除，默认主题改为
+#       Argon（jerrykuku 官方 v3.1.4，immortalwrt/luci feed 同步维护，
+#       OP 最火主题）；Aurora 保留可切换。
+#       Argon 与 Aurora 自带的 30- 抢默认脚本均由 files 覆盖废掉
+#       （见 3.4a / 3.4b），默认统一由 99-lang-theme 指定。
 # ---------------------------------------------------------------
-group "引入 luci-theme-mac (macOS 风格 / Liquid Glass)"
-TM_DST="$SRC/package/luci-theme-mac"
-rm -rf /tmp/opmacos-theme "$TM_DST"
-git clone --depth 1 https://github.com/luxinxin0378-create/opmacos-.git /tmp/opmacos-theme || {
-  echo "::error::opmacos- 主题仓库克隆失败"; exit 1; }
-cp -a /tmp/opmacos-theme/. "$TM_DST/" || { echo "::error::luci-theme-mac 拷入失败"; exit 1; }
-rm -rf /tmp/opmacos-theme "$TM_DST/.git"
-grep -q "macOS Style Theme" "$TM_DST/Makefile" || { echo "::error::luci-theme-mac Makefile 异常"; exit 1; }
-[ -f "$TM_DST/ucode/template/themes/mac/header.ut" ] || { echo "::error::主题 ucode 模板缺失"; exit 1; }
-echo "--- luci-theme-mac (Liquid Glass) 文件 ---"
-find "$TM_DST" -type f | sed "s|$TM_DST/||"
+group "主题策略：默认 Argon（mac 已移除，Aurora 保留）"
+grep -q "CONFIG_PACKAGE_luci-theme-argon=y" "$SEED" || {
+  echo "::error::seed 缺少 luci-theme-argon（默认主题包）"; exit 1; }
+grep -q "CONFIG_PACKAGE_luci-theme-aurora=y" "$SEED" || {
+  echo "::error::seed 缺少 luci-theme-aurora（可切换主题包）"; exit 1; }
+echo "默认主题：Argon（feed 版）；可切换：Aurora"
 endg
 
 # ---------------------------------------------------------------
@@ -444,14 +439,23 @@ EOF
 exit 0
 AURORAFIX
 
-cat > "$OVL/etc/uci-defaults/99-lang-theme" <<LANGTHEME
+cat > "$OVL/etc/uci-defaults/99-lang-theme" <<'LANGTHEME'
 #!/bin/sh
 uci -q set luci.main.lang='zh_cn'
-uci -q set luci.themes.Mac='/luci-static/mac'
-uci -q set luci.main.mediaurlbase='/luci-static/mac'
+uci -q set luci.themes.Argon='/luci-static/argon'
+uci -q set luci.main.mediaurlbase='/luci-static/argon'
 uci -q commit luci
 exit 0
 LANGTHEME
+
+# 3.4b 同款 race 防治：feed 版 Argon（jerrykuku v3.1.4）自带的 30- 脚本
+#     会抢默认且慢 commit 时抹掉 Aurora 注册，files 覆盖为「只注册」版。
+cat > "$OVL/etc/uci-defaults/30_luci-theme-argon" <<'ARGONFIX'
+#!/bin/sh
+uci get luci.themes.Argon >/dev/null 2>&1 || \
+uci -q set luci.themes.Argon=/luci-static/argon
+exit 0
+ARGONFIX
 chmod +x "$OVL/etc/uci-defaults/"*
 endg
 
@@ -640,7 +644,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          luci-app-airoha-npu luci-app-qmodem-next qmodem sms-forwarder-next luci-app-openclash \
          luci-app-passwall xray-core luci-app-cpufreq \
          zoneinfo-core zoneinfo-asia \
-         luci-theme-mac luci-theme-aurora luci-app-aurora-config luci-i18n-base-zh-cn \
+         luci-theme-argon luci-theme-aurora luci-app-aurora-config luci-i18n-base-zh-cn \
          usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
          kmod-usb-serial-sierrawireless kmod-mtk-t7xx \
          autocore kmod-crypto-hw-eip93 kmod-cryptodev openssl-util \
