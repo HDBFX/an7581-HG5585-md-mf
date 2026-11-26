@@ -47,7 +47,6 @@ src-git telephony https://github.com/openwrt/telephony.git
 src-git video https://github.com/openwrt/video.git
 src-git pon_drivers https://github.com/pbs05/openwrt-pon-drivers.git
 src-git onu https://github.com/naoki66/OpenWrt_ONU_CONFIG.git;main
-src-git airoha https://github.com/naoki66/luci-app-airoha.git;main
 src-git qmodem https://github.com/FUjr/QModem.git;v3.2.0
 # PassWall：依赖包仓库在前，luci 应用仓库在后（依赖含 xray-core/tcping/geoview 等）
 src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git
@@ -168,13 +167,15 @@ endg
 # ---------------------------------------------------------------
 group "引入 luci-app-airoha-npu (NPU 监控 / CPU 超频)"
 NPU_DIR="$SRC/package/luci-app-airoha-npu"
-if [ ! -f "$NPU_DIR/Makefile" ]; then
-  rm -rf /tmp/airoha-npu-src
-  git clone --depth 1 https://github.com/rchen14b/luci-app-airoha-npu.git /tmp/airoha-npu-src
-  mkdir -p "$NPU_DIR"
-  cp -a /tmp/airoha-npu-src/. "$NPU_DIR/"
-  rm -rf /tmp/airoha-npu-src
-fi
+# 无条件覆盖：naoki66/luci-app-airoha feed 的同名包（61408B 后端）不带 PLL
+# 超频实现，曾因同名冲突压过 package/ 的 rchen14b 版（19581B）——feed 行
+# 已删除，此处保留 rm -rf 强制覆盖作为双保险。
+rm -rf /tmp/airoha-npu-src "$NPU_DIR"
+git clone --depth 1 https://github.com/rchen14b/luci-app-airoha-npu.git /tmp/airoha-npu-src || {
+  echo "::error::rchen14b/luci-app-airoha-npu 克隆失败"; exit 1; }
+mkdir -p "$NPU_DIR"
+cp -a /tmp/airoha-npu-src/. "$NPU_DIR/"
+rm -rf /tmp/airoha-npu-src
 grep -q 'LUCI_TITLE:=LuCI Airoha SoC Status' "$NPU_DIR/Makefile" || {
   echo "::error::luci-app-airoha-npu 源码不完整"
   exit 1
