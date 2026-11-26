@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # 个人精简版（xg-040g-md / xg-040g-mf）云端构建准备：
-# 全新克隆 pbs05/ponwrt；只装 QModem 全功能(v3.2.0) + OpenClash(不带内核)
-# + PassWall(Xray 核心+nftables 透明代理) + USB 4G/5G 驱动 + PON 基础栈
-# + 调优三件套；不含其他主题与 Passwall。
+# 全新克隆 pbs05/ponwrt；只装 OpenClash(不带内核) + PassWall(Xray 核心+nftables
+# 透明代理) + PON 基础栈 + 调优三件套；不含其他主题与 Passwall。
+# 已按用户要求移除：QModem 全功能 + USB 4G/5G 驱动、udpxy；NPU 界面已中文化；
+# 修复 sysupgrade 升级后 LAN IP 被重置回出厂网关的 bug（99-lan-ip 改一次性标记）。
 # 由 .github/workflows/build-personal.yml 调用，运行在 GitHub-hosted runner 上。
 set -euo pipefail
 
@@ -36,7 +37,7 @@ mkdir -p "$REPO/cache/dl" "$REPO/cache/ccache"
 endg
 
 # ---------------------------------------------------------------
-# 2) feeds：qmodem 锁定 v3.2.0 tag（用户指定 3.2 或以下）
+# 2) feeds（QModem feed 已随功能整体移除）
 # ---------------------------------------------------------------
 group "写入 feeds.conf"
 cat > feeds.conf <<'FEEDS'
@@ -47,7 +48,6 @@ src-git telephony https://github.com/openwrt/telephony.git
 src-git video https://github.com/openwrt/video.git
 src-git pon_drivers https://github.com/pbs05/openwrt-pon-drivers.git
 src-git onu https://github.com/naoki66/OpenWrt_ONU_CONFIG.git;main
-src-git qmodem https://github.com/FUjr/QModem.git;v3.2.0
 # PassWall：依赖包仓库在前，luci 应用仓库在后（依赖含 xray-core/tcping/geoview 等）
 src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git
 src-git passwall https://github.com/Openwrt-Passwall/openwrt-passwall.git
@@ -189,7 +189,249 @@ grep -q 'devmem' "$NPU_DIR/root/usr/libexec/rpcd/luci.airoha_npu" || {
   echo "::error::该版本后端缺 devmem 超频路径，请检查仓库"
   exit 1
 }
-echo "luci-app-airoha-npu rchen14b 版就绪（含超频）"
+# 2.5b NPU 界面中文化：上游仅英文 + 西语，补 po/zh_Hans 简体中文翻译，
+#      LuCI 编译时自动生成 luci-i18n-airoha-npu-zh-cn（全局 LANG=zh_Hans 已开），
+#      覆盖 NPU 状态 / PPE 流卸载 / CPU 频率与超频全部界面字符串。
+mkdir -p "$NPU_DIR/po/zh_Hans"
+cat > "$NPU_DIR/po/zh_Hans/luci-app-airoha-npu.po" <<'NPUZH'
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8"
+
+msgid ""
+"%d MHz is above %d MHz, which is as far as this has been tested. The board "
+"may run unstable or stop responding until it is power cycled."
+msgstr "%d MHz 已超过已验证的 %d MHz 上限，设备可能运行不稳定或失去响应，需断电重启才能恢复。"
+
+msgid "%d sta"
+msgstr "%d 个终端"
+
+msgid "%d used / %d free (%s%%)"
+msgstr "%d 已用 / %d 空闲（%s%%）"
+
+msgid "%s (%d regions)"
+msgstr "%s（%d 个内存区）"
+
+msgid "%s | %s | %d cores"
+msgstr "%s | %s | %d 核"
+
+msgid "8x RISC-V via PCIe RAM"
+msgstr "8 核 RISC-V（经 PCIe 内存）"
+
+msgid "Active"
+msgstr "运行中"
+
+msgid "Active (%s)"
+msgstr "运行中（%s）"
+
+msgid "Airoha SoC Status"
+msgstr "Airoha SoC 状态"
+
+msgid "Apply"
+msgstr "应用"
+
+msgid "Applying..."
+msgstr "应用中…"
+
+msgid "Band %d"
+msgstr "频段 %d"
+
+msgid "Bound"
+msgstr "已绑定"
+
+msgid "CPU Cores"
+msgstr "CPU 核心数"
+
+msgid "CPU DMA 1"
+msgstr "CPU DMA 1"
+
+msgid "CPU DMA 2"
+msgstr "CPU DMA 2"
+
+msgid "CPU Frequency"
+msgstr "CPU 频率"
+
+msgid "CPU set to %d MHz"
+msgstr "CPU 已设为 %d MHz"
+
+msgid "CPU: %s"
+msgstr "CPU：%s"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Confirm overclock"
+msgstr "确认超频"
+
+msgid "Continue"
+msgstr "继续"
+
+msgid "Could not set the governor: %s"
+msgstr "无法设置调频策略：%s"
+
+msgid "Could not set the maximum frequency: %s"
+msgstr "无法设置最高频率：%s"
+
+msgid "Current Frequency"
+msgstr "当前频率"
+
+msgid "Direct PLL write, %d-%d MHz. Tested up to %d MHz."
+msgstr "直接写 PLL 寄存器，范围 %d-%d MHz，已验证最高 %d MHz。"
+
+msgid "Drop %s"
+msgstr "丢弃 %s"
+
+msgid "Error: %s"
+msgstr "错误：%s"
+
+msgid "Ethernet"
+msgstr "以太网"
+
+msgid "Failed: %s"
+msgstr "失败：%s"
+
+msgid "Fair"
+msgstr "一般"
+
+msgid "Firmware / Clock / Cores"
+msgstr "固件 / 时钟 / 核心数"
+
+msgid "Frame Engine"
+msgstr "帧引擎"
+
+msgid "Good"
+msgstr "良好"
+
+msgid "Governor"
+msgstr "调频策略"
+
+msgid "Grant access to Airoha SoC status (NPU + CPU + Overclock)"
+msgstr "授予访问 Airoha SoC 状态（NPU + CPU + 超频）的权限"
+
+msgid "HW Offload: %s%%"
+msgstr "硬件卸载：%s%%"
+
+msgid "HWF: %s"
+msgstr "硬件转发：%s"
+
+msgid "Idle"
+msgstr "空闲"
+
+msgid "Index"
+msgstr "序号"
+
+msgid "Internal Switch (1G LAN3/4)"
+msgstr "内置交换机（1G LAN3/4）"
+
+msgid "LAN2 (USXGMII 10G)"
+msgstr "LAN2（USXGMII 10G）"
+
+msgid "Manages:"
+msgstr "管理："
+
+msgid "Max Frequency"
+msgstr "最高频率"
+
+msgid "N/A"
+msgstr "无"
+
+msgid "NPU & Offload Engine"
+msgstr "NPU 与卸载引擎"
+
+msgid "NPU Status"
+msgstr "NPU 状态"
+
+msgid "New Flow"
+msgstr "新流"
+
+msgid "No clients"
+msgstr "无客户端"
+
+msgid "Not Active"
+msgstr "未激活"
+
+msgid "Not available: unrecognised SoC"
+msgstr "不可用：无法识别的 SoC"
+
+msgid "Off"
+msgstr "关闭"
+
+msgid "Original Flow"
+msgstr "原始流"
+
+msgid "Overclock"
+msgstr "超频"
+
+msgid "Overclock request failed: %s"
+msgstr "超频请求失败：%s"
+
+msgid "P7 WiFi DMA"
+msgstr "P7 WiFi DMA"
+
+msgid "PPE Engines"
+msgstr "PPE 引擎"
+
+msgid "PPE Flow Offload Entries"
+msgstr "PPE 流卸载条目"
+
+msgid "PPE init, WDMA rings, flow stats"
+msgstr "PPE 初始化、WDMA 环、流统计"
+
+msgid "PSE Port Queue Status"
+msgstr "PSE 端口队列状态"
+
+msgid "PSE Shared Buffer"
+msgstr "PSE 共享缓冲"
+
+msgid "Poor"
+msgstr "较差"
+
+msgid "RX"
+msgstr "接收（RX）"
+
+msgid "RX Drop"
+msgstr "接收丢包"
+
+msgid "Reserved Memory"
+msgstr "保留内存"
+
+msgid "SoC"
+msgstr "SoC"
+
+msgid "SoC Status"
+msgstr "SoC 状态"
+
+msgid "State"
+msgstr "状态"
+
+msgid "TX"
+msgstr "发送（TX）"
+
+msgid "TX Drop"
+msgstr "发送丢包"
+
+msgid "TX: %s"
+msgstr "发送：%s"
+
+msgid "The frequency must be between %d and %d MHz"
+msgstr "频率必须在 %d 到 %d MHz 之间"
+
+msgid "Total"
+msgstr "总计"
+
+msgid "Type"
+msgstr "类型"
+
+msgid "Unknown"
+msgstr "未知"
+
+msgid "WAN (USXGMII 10G)"
+msgstr "WAN（USXGMII 10G）"
+
+msgid "devmem is not available on this build"
+msgstr "此固件未启用 devmem"
+NPUZH
+grep -q 'msgid "Overclock"' "$NPU_DIR/po/zh_Hans/luci-app-airoha-npu.po" || { echo "::error::NPU 中文翻译写入失败"; exit 1; }
+echo "luci-app-airoha-npu rchen14b 版就绪（含超频 + 简体中文界面）"
 endg
 
 # ---------------------------------------------------------------
@@ -526,12 +768,19 @@ uci -q commit ksmbd
 exit 0
 KSMBDSHARE
 
-# 3.3 登录 IP 192.168.2.1
+# 3.3 登录 IP 192.168.2.1 —— 修复「固件升级后网关被重置回出厂值」bug
+#     根因：uci-defaults 属固件层，sysupgrade 后首次开机会重新执行，原脚本
+#     无条件 uci set，把用户改过的 LAN IP 覆盖回 192.168.2.1。
+#     修复：用 network.lan.fw_lanip_set 作一次性标记（随 sysupgrade 配置备份
+#     保留），升级后标记仍在 → 跳过，保留用户网关；仅全新刷机（无标记）才写入。
 cat > "$OVL/etc/uci-defaults/99-lan-ip" <<'LANIP'
 #!/bin/sh
+# 已应用过出厂 LAN IP 定制（标记随 sysupgrade 配置备份保留）→ 升级场景跳过
+[ "$(uci -q get network.lan.fw_lanip_set)" = "1" ] && exit 0
 uci -q batch <<'UCIBATCH'
 set network.lan.ipaddr='192.168.2.1'
 set network.lan.netmask='255.255.255.0'
+set network.lan.fw_lanip_set='1'
 commit network
 UCIBATCH
 exit 0
@@ -611,46 +860,9 @@ esac
 exit 0
 PWDNS
 
-# 3.35 QModem v3.2.0 rpcd 加载链修复：rpcd 分发脚本漏加载 cmds/<vendor>.sh，
-#     quectel 专属 cmd_*（型号/制造商/固件版本/温度/电压）函数不存在 →
-#     概览页 base_info 只剩 AT端口/连接状态。幂等补丁：已含加载行自动跳过。
-cat > "$OVL/etc/uci-defaults/95-qmodem-rpcd-cmds" <<'RPCDFIX'
-RPCD=/usr/libexec/rpcd/qmodem
-if [ -f "$RPCD" ] && ! grep -qF 'cmds/${vendor}.sh' "$RPCD"; then
-	sed -i 's|^\([[:space:]]*\)\. /usr/share/qmodem/modem_util.sh$|\1. /usr/share/qmodem/modem_util.sh\n\1[ -n "$vendor" ] \&\& [ -f "/usr/share/qmodem/cmds/${vendor}.sh" ] \&\& . "/usr/share/qmodem/cmds/${vendor}.sh"|' "$RPCD"
-fi
-exit 0
-RPCDFIX
+# （3.35 QModem rpcd 修复段已随 QModem 功能移除）
 
-# 94.3 短信转发自愈：LuCI 表单对"等于默认值"的选项保存时不写入 UCI
-#     （api_type 下拉框 default=webhook，界面显示着但配置里没有），
-#     转发器读不到 api_type 就静默跳过实例 → 配了也不转发。
-#     开机扫描：启用了但缺 api_type 的实例，按 api_config 特征自动补
-#     类型（已有类型的不动，幂等；未启用的示例实例不碰）。
-cat > "$OVL/etc/uci-defaults/94-smsf-apitype" <<'SMSF'
-#!/bin/sh
-[ -f /etc/config/sms_forwarder ] || exit 0
-i=0
-while uci -q get "sms_forwarder.@sms_forward_instance[$i]" >/dev/null 2>&1; do
-  s="sms_forwarder.@sms_forward_instance[$i]"
-  if [ "$(uci -q get "$s.enable")" = "1" ] && [ -z "$(uci -q get "$s.api_type")" ]; then
-    ac=$(uci -q get "$s.api_config")
-    t=""
-    case "$ac" in
-      *'"bot_token"'*)     t=tgbot ;;
-      *'"pushkey"'*)       t=pushdeer ;;
-      *'"recipient_uri"'*) t=sip ;;
-      *open.feishu.cn*)    t=feishu ;;
-      *'"token"'*)         t=serverchan ;;
-      *'"webhook_url"'*)   t=webhook ;;
-    esac
-    [ -n "$t" ] && uci set "$s.api_type=$t"
-  fi
-  i=$((i+1))
-done
-uci commit sms_forwarder
-exit 0
-SMSF
+# （94.3 短信转发自愈段已随 QModem/短信转发移除）
 
 # 3.4 默认简体中文 + 默认主题 Argon（jerrykuku 官方 v3.1.4 / OP 最火主题）
 #     mac 主题已整体移除；feed argon 自带的 30- 抢默认脚本被 30_luci-theme-argon
@@ -828,10 +1040,6 @@ group "校验个人精简版包集合"
 # 正向：必须全部入选（QModem 全家 + OpenClash + USB 驱动 + PON 基础 + 中文
 #       + NPU/超频界面 + 短信转发）
 for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
-         qmodem qfirehose \
-         luci-app-qmodem-next luci-app-qmodem-monitor \
-         luci-app-qmodem-ttlfw4 \
-         sms-forwarder-next \
          luci-app-airoha-npu \
          luci-app-openclash luci-app-passwall luci-i18n-base-zh-cn luci-theme-argon \
          xray-core \
@@ -841,10 +1049,8 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          p910nd luci-app-p910nd luci-i18n-p910nd-zh-cn kmod-usb-printer \
          nfs-kernel-server luci-app-nfs luci-i18n-nfs-zh-cn \
          luci-app-store \
-         udpxy luci-app-udpxy luci-i18n-udpxy-zh-cn \
          adguardhome luci-app-adguardhome luci-i18n-adguardhome-zh-cn \
-         usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
-         kmod-usb-serial-sierrawireless kmod-mtk-t7xx kmod-tcp-bbr \
+         kmod-tcp-bbr \
          filebrowser autocore \
          luci-app-cpufreq kmod-crypto-hw-eip93 kmod-cryptodev \
          openssl-util libopenssl-devcrypto \
@@ -871,12 +1077,18 @@ for c in CONFIG_BUSYBOX_CUSTOM CONFIG_BUSYBOX_CONFIG_DEVMEM CONFIG_KERNEL_DEVMEM
 done
 # 反向：确认精简目标确实不在固件里
 # （EIP93/cryptodev/cpufreq 已按用户要求重新引入；Tailscale 已按用户要求移除，换 ddnsto；
-#   PassWall 内核按用户要求只内置 Xray，SingBox 必须不在）
+#   PassWall 内核按用户要求只内置 Xray，SingBox 必须不在；
+#   QModem 全家 + USB 4G/5G 驱动 + udpxy 已按用户要求移除，必须都不在）
 for p in luci-theme-mac luci-theme-aurora luci-app-aurora-config luci-theme-vantage \
          luci-app-vantage luci-app-passwall2 luci-app-ssr-plus \
          tailscale luci-app-tailscale \
-         luci-app-qmodem luci-app-qmodem-sms luci-app-qmodem-mwan \
-         luci-app-qmodem-ttl sms-forwarder sing-box; do
+         qmodem qfirehose \
+         luci-app-qmodem luci-app-qmodem-next luci-app-qmodem-monitor \
+         luci-app-qmodem-ttlfw4 luci-app-qmodem-sms luci-app-qmodem-mwan \
+         luci-app-qmodem-ttl sms-forwarder sms-forwarder-next \
+         usb-modeswitch kmod-usb-net-qmi-wwan kmod-mtk-t7xx \
+         kmod-usb-serial-sierrawireless \
+         udpxy luci-app-udpxy sing-box; do
   if grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人精简版不应包含 ${p}"
     exit 1
@@ -887,5 +1099,5 @@ if ! grep -q "^CONFIG_LUCI_LANG_zh_Hans=y$" .config; then
   echo "::error::缺少 CONFIG_LUCI_LANG_zh_Hans，中文翻译包不会生效"
   exit 1
 fi
-echo "个人精简版包校验通过（QModem 全功能 v3.2.0 + 短信转发 + OpenClash 无内核 + PassWall 内置 Xray 内核 + ddnsto + USB 驱动 + NPU/超频 + 插件全家桶）"
+echo "个人精简版包校验通过（OpenClash 无内核 + PassWall 内置 Xray + ddnsto + NPU/超频(中文) + 插件全家桶；已移除 QModem/USB-4G5G/udpxy）"
 endg
