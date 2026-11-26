@@ -139,23 +139,18 @@ fi
 endg
 
 # ---------------------------------------------------------------
-# 2.4e) luci-theme-mac（macOS 风格主题 / iOS 27 Liquid Glass v2）
-#       源码独立维护在 luxinxin0378-create/opmacos-（主题可单独拉取安装，
-#       此处为个人版固件内置集成）：ucode 模板三件套 + cascade.css
-#       磨砂玻璃/SF 字体栈/大圆角卡片/暗色跟随系统；
-#       包自带 30_luci-theme-mac uci-defaults，99-lang-theme 最终设为默认。
-# ---------------------------------------------------------------
-group "引入 luci-theme-mac (macOS 风格 / Liquid Glass v2)"
-TM_DST="$SRC/package/luci-theme-mac"
-rm -rf /tmp/opmacos-theme "$TM_DST"
-git clone --depth 1 https://github.com/luxinxin0378-create/opmacos-.git /tmp/opmacos-theme || {
-  echo "::error::opmacos- 主题仓库克隆失败"; exit 1; }
-cp -a /tmp/opmacos-theme/. "$TM_DST/" || { echo "::error::luci-theme-mac 拷入失败"; exit 1; }
-rm -rf /tmp/opmacos-theme "$TM_DST/.git"
-grep -q "macOS Style Theme" "$TM_DST/Makefile" || { echo "::error::luci-theme-mac Makefile 异常"; exit 1; }
-[ -f "$TM_DST/ucode/template/themes/mac/header.ut" ] || { echo "::error::主题 ucode 模板缺失"; exit 1; }
-echo "--- luci-theme-mac (Liquid Glass v2) 文件 ---"
-find "$TM_DST" -type f | sed "s|$TM_DST/||"
+# 2.4e) 主题策略（2026-11-26 调整）：mac 主题整体移除，默认主题改为
+#       Argon（jerrykuku 官方 v3.1.4，immortalwrt/luci feed 同步维护，OP 最火主题）。
+#       feed argon 自带的 30- 抢默认脚本仍由 files 覆盖废掉（见 3.4a），
+#       默认统一由 99-lang-theme 指定，避免并行 commit race。
+group "主题策略：默认 Argon（mac 已移除）"
+grep -q "CONFIG_PACKAGE_luci-theme-argon=y" "$SEED" || {
+  echo "::error::seed 缺少 luci-theme-argon（默认主题包）"; exit 1; }
+PW_THEME_MK="$SRC/feeds/luci/themes/luci-theme-argon/Makefile"
+grep -q "PKG_VERSION:=3" "$PW_THEME_MK" 2>/dev/null || \
+  grep -q "LUCI_TITLE" "$PW_THEME_MK" 2>/dev/null || {
+  echo "::warning::feed argon Makefile 结构异常，仅告警不阻塞"; }
+echo "默认主题：Argon（feed 版）"
 endg
 
 # 2.4c) autocore 重新引入：fork 主页温度/频率/架构 rpcd 读数的 ACL（luci-mod-status-autocore.json）
@@ -653,27 +648,26 @@ uci commit sms_forwarder
 exit 0
 SMSF
 
-# 3.4 默认简体中文 + 默认主题 mac（macOS 风格 Liquid Glass；Argon 保留可切换）
-#     99- 前缀保证在主题包自带 30_luci-theme-mac 之后执行覆盖
+# 3.4 默认简体中文 + 默认主题 Argon（jerrykuku 官方 v3.1.4 / OP 最火主题）
+#     mac 主题已整体移除；feed argon 自带的 30- 抢默认脚本被 30_luci-theme-argon
+#     覆盖为「只注册」，默认统一由本脚本指定，杜绝并行 commit race。
 cat > "$OVL/etc/uci-defaults/99-lang-theme" <<'LANGTHEME'
 #!/bin/sh
 uci -q set luci.main.lang='zh_cn'
-uci -q set luci.main.mediaurlbase='/luci-static/mac'
+uci -q set luci.main.mediaurlbase='/luci-static/argon'
 uci -q commit luci
 exit 0
 LANGTHEME
 # 3.4b 废掉 Argon 自带 uci-defaults 的「抢默认」行为（保留主题注册）
 #     根因：首启 uci-defaults 为并行后台执行（( . file ) & + wait），
-#     Argon 的迁移脚本（2354B）commit 慢、后到——它 commit 时用
-#     自己的 config 快照重写 /etc/config/luci，把 mac 主题先写入的
-#     luci.themes.Mac 注册与 mediaurlbase 全部抹掉。
-#     表现为：默认主题永远 Argon，且主题下拉里没有 Mac 项，
-#     用户手动也无法切换。
+#     Argon 的迁移脚本 commit 慢、后到——它 commit 时用自己的 config
+#     快照重写 /etc/config/luci，会把其他主题注册与默认值抹掉，
+#     表现为：首启默认主题随机、主题切换下拉缺项。
 #     处理：用 files 覆盖（prepare_rootfs 在包安装后执行）把
 #     30_luci-theme-argon 替换为只注册、不设默认的空操作版本。
 cat > "$OVL/etc/uci-defaults/30_luci-theme-argon" <<'ARGONFIX'
 #!/bin/sh
-# Argon 主题注册保留（下拉仍可选），默认主题让位给 zzz-0-mac-default
+# 只注册 Argon，不设默认（默认由 99-lang-theme 统一指定）
 uci -q set luci.themes.Argon='/luci-static/argon'
 exit 0
 ARGONFIX
@@ -836,7 +830,6 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          sms-forwarder-next \
          luci-app-airoha-npu \
          luci-app-openclash luci-app-passwall luci-i18n-base-zh-cn luci-theme-argon \
-         luci-theme-mac \
          xray-core \
          zoneinfo-core zoneinfo-asia \
          luci-app-librespeed librespeed-go \
@@ -875,7 +868,7 @@ done
 # 反向：确认精简目标确实不在固件里
 # （EIP93/cryptodev/cpufreq 已按用户要求重新引入；Tailscale 已按用户要求移除，换 ddnsto；
 #   PassWall 内核按用户要求只内置 Xray，SingBox 必须不在）
-for p in luci-theme-aurora luci-app-aurora-config luci-theme-vantage \
+for p in luci-theme-mac luci-theme-aurora luci-app-aurora-config luci-theme-vantage \
          luci-app-vantage luci-app-passwall2 luci-app-ssr-plus \
          tailscale luci-app-tailscale \
          luci-app-qmodem luci-app-qmodem-sms luci-app-qmodem-mwan \
