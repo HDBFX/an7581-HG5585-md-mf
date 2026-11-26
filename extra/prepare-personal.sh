@@ -307,6 +307,7 @@ return baseclass.extend({
 			L.resolveDefault(fs.read('/sys/devices/system/cpu/cpufreq/policy0/cpuinfo_cur_freq'), ''),
 			L.resolveDefault(fs.read('/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq'), ''),
 			L.resolveDefault(fs.read('/sys/devices/system/cpu/cpufreq/cpu0/cpuinfo_cur_freq'), ''),
+			L.resolveDefault(fs.exec('/bin/sh', ['-c', '/sbin/cpufreq_real 2>/dev/null']), {}),
 			uci.load('system')
 		]);
 	},
@@ -323,7 +324,8 @@ return baseclass.extend({
 		    zoneTemp    = (L.isObject(data[8]) && typeof data[8].stdout == 'string') ? parseInt(data[8].stdout, 10) / 1000.0 : 0,
 		    freqk1      = parseInt(data[9], 10),
 		    freqk2      = parseInt(data[10], 10),
-		    freqk3      = parseInt(data[11], 10);
+		    freqk3      = parseInt(data[11], 10),
+		    freqk0      = (L.isObject(data[12]) && typeof data[12].stdout == 'string') ? parseInt(data[12].stdout, 10) : 0;
 
 		luciversion = luciversion.branch + ' ' + luciversion.revision;
 
@@ -349,9 +351,10 @@ return baseclass.extend({
 		if (!tempstr && zoneTemp > 0 && zoneTemp < 150)
 			tempstr = '%.1f ℃'.format(zoneTemp);
 
-		/* CPU 频率：优先 cpufreq sysfs（kHz），airoha 布局非标准时从 cpuinfo
-		   输出解析（格式 "…x 2 (1050MHz, 58.4°C)"，rpcd getCPUInfo 产物，必有） */
-		var freqk = freqk1 || freqk2 || freqk3 || 0,
+		/* CPU 频率：优先 /sbin/cpufreq_real（PLL 寄存器直读，真值——含 npu APP
+		   的 PLL 直写超频，cpufreq sysfs 感知不到），cpufreq sysfs 兜底，再兜
+		   底 cpuinfo 输出解析（格式 "…x 2 (1050MHz, 58.4°C)"，rpcd 产物，必有） */
+		var freqk = freqk0 || freqk1 || freqk2 || freqk3 || 0,
 		    freqstr = null;
 
 		if (freqk > 0) {
