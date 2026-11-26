@@ -384,6 +384,44 @@ uci -q set luci.main.lang='zh_cn'
 uci -q commit luci
 exit 0
 LANG
+
+# 98-pw-dns-selfheal：PassWall DNS 自愈兜底（正式版不带 PassWall，用户后期自装时生效）
+#   背景（2026-11-26 设备实测）：PassWall 默认 remote_dns=1.1.1.1 → chinadns-ng
+#   trust-dns tcp://1.1.1.1；部分机房对 CF 1.1.1.0/24 anycast 路由黑洞
+#   （1.1.1.1/1.0.0.1:443 超时，8.8.4.4:443 正常）→ 境外域名解析挂起 =「没网」。
+#   正式版首启时 /etc/config/passwall 尚不存在（用户后期经 iStore/opkg 自装），
+#   uci-defaults 直接改不了 → 改为把自愈块写进 /etc/rc.local：
+#   每次开机 90 秒后检测一次，装了 PassWall 且远程 DNS 仍为默认值（空/1.1.1.1/
+#   带前缀默认）则改为 8.8.8.8 并重启 PassWall；用户自定义 DNS 永不覆盖。
+#   注意 remote_dns 必须存裸 IP（PassWall 生成 chinadns-ng 配置时自动拼
+#   tcp:// 前缀，存 'tcp://8.8.8.8' 会二次拼接成 tcp://tcp://8.8.8.8 乱码）。
+#   rc.local 是同步执行的，sleep 必须放进后台子壳，否则阻塞开机。
+cat > "$OVL/etc/uci-defaults/98-pw-dns-selfheal" <<'PWHEAL'
+#!/bin/sh
+[ -f /etc/rc.local ] || exit 0
+grep -q "PW_DNS_SELFHEAL" /etc/rc.local && exit 0
+sed -i '/^[[:space:]]*exit 0$/d' /etc/rc.local
+cat >> /etc/rc.local <<'RCAPPEND'
+
+# PW_DNS_SELFHEAL: PassWall 默认远程 DNS 1.1.1.1 在部分机房为路由黑洞，自动改 8.8.8.8
+(
+  sleep 90
+  if [ -f /etc/config/passwall ]; then
+    cur=$(uci -q get passwall.@global[0].remote_dns)
+    case "$cur" in
+      ""|"1.1.1.1"|"tcp://1.1.1.1"|"udp://1.1.1.1")
+        uci set passwall.@global[0].remote_dns='8.8.8.8'
+        uci commit passwall
+        /etc/init.d/passwall restart >/dev/null 2>&1
+        logger -t pw-dns-selfheal "remote_dns 默认值 → 8.8.8.8（规避 1.1.1.1 anycast 路由黑洞）"
+        ;;
+    esac
+  fi
+) &
+exit 0
+RCAPPEND
+exit 0
+PWHEAL
 chmod +x "$OVL/etc/uci-defaults/"*
 endg
 
