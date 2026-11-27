@@ -348,7 +348,7 @@ net.ipv4.tcp_wmem = 4096 65536 16777216
 net.netfilter.nf_conntrack_max = 131072
 NETTUNE
 
-# 3.2b 小包转发调优（硬件依据：4 核 Cortex-A53 / 512MB RAM / 10G PON + 2.5G LAN）
+# 3.2b 小包转发调优（硬件依据：MD=AN7581 4 核 / MF=AN7583 2 核 Cortex-A53 / 512MB RAM / 10G PON + 2.5G LAN，掩码按核数自适应）
 #      netdev_budget/Usecs/backlog：软中断预算与积压队列加大，高 pps 不丢包不抖动
 #      fq + BBR 官方推荐搭配；min_free_kbytes 提高内存最低保留水位防分配失败丢包
 #      FastOpen/ECN/MTU 探测/长连接 —— 桥接转发与 NAT 稳定性
@@ -358,7 +358,6 @@ net.core.netdev_budget_usecs = 8000
 net.core.netdev_max_backlog = 8192
 net.core.somaxconn = 4096
 net.core.netdev_tstamp_prequeue = 0
-net.core.rps_sock_flow_entries = 32768
 net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_ecn = 1
 net.ipv4.tcp_mtu_probing = 1
