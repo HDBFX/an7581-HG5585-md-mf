@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 个人精简版（xg-040g-md / xg-040g-mf）云端构建准备：
-# 全新克隆 pbs05/ponwrt；只装 QModem 全功能(v3.2.0) + OpenClash(不带内核)
-# + PassWall(Xray 核心+nftables 透明代理) + USB 4G/5G 驱动 + PON 基础栈
+# 全新克隆 pbs05/ponwrt；只装 OpenClash(不带内核)
+# + PassWall(Xray 核心+nftables 透明代理) + PON 基础栈
 # + 调优三件套；不含其他主题与 Passwall。
 # 由 .github/workflows/build-personal.yml 调用，运行在 GitHub-hosted runner 上。
 set -euo pipefail
@@ -48,7 +48,7 @@ mkdir -p "$REPO/cache/dl" "$REPO/cache/ccache"
 endg
 
 # ---------------------------------------------------------------
-# 2) feeds：qmodem 锁定 v3.2.0 tag（用户指定 3.2 或以下）
+# 2) feeds：官方 + PON/ONU/AIROHA/PassWall 专用 feed
 # ---------------------------------------------------------------
 group "写入 feeds.conf"
 cat > feeds.conf <<'FEEDS'
@@ -59,7 +59,6 @@ src-git telephony https://github.com/openwrt/telephony.git
 src-git video https://github.com/openwrt/video.git
 src-git pon_drivers https://github.com/pbs05/openwrt-pon-drivers.git
 src-git onu https://github.com/naoki66/OpenWrt_ONU_CONFIG.git;main
-src-git qmodem https://github.com/FUjr/QModem.git;v3.2.0
 # PassWall：依赖包仓库在前，luci 应用仓库在后（依赖含 xray-core/tcping/geoview 等）
 src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git
 src-git passwall https://github.com/Openwrt-Passwall/openwrt-passwall.git
@@ -644,47 +643,6 @@ esac
 exit 0
 PWDNS
 
-# 3.35 QModem v3.2.0 rpcd 加载链修复：rpcd 分发脚本漏加载 cmds/<vendor>.sh，
-#     quectel 专属 cmd_*（型号/制造商/固件版本/温度/电压）函数不存在 →
-#     概览页 base_info 只剩 AT端口/连接状态。幂等补丁：已含加载行自动跳过。
-cat > "$OVL/etc/uci-defaults/95-qmodem-rpcd-cmds" <<'RPCDFIX'
-RPCD=/usr/libexec/rpcd/qmodem
-if [ -f "$RPCD" ] && ! grep -qF 'cmds/${vendor}.sh' "$RPCD"; then
-	sed -i 's|^\([[:space:]]*\)\. /usr/share/qmodem/modem_util.sh$|\1. /usr/share/qmodem/modem_util.sh\n\1[ -n "$vendor" ] \&\& [ -f "/usr/share/qmodem/cmds/${vendor}.sh" ] \&\& . "/usr/share/qmodem/cmds/${vendor}.sh"|' "$RPCD"
-fi
-exit 0
-RPCDFIX
-
-# 94.3 短信转发自愈：LuCI 表单对"等于默认值"的选项保存时不写入 UCI
-#     （api_type 下拉框 default=webhook，界面显示着但配置里没有），
-#     转发器读不到 api_type 就静默跳过实例 → 配了也不转发。
-#     开机扫描：启用了但缺 api_type 的实例，按 api_config 特征自动补
-#     类型（已有类型的不动，幂等；未启用的示例实例不碰）。
-cat > "$OVL/etc/uci-defaults/94-smsf-apitype" <<'SMSF'
-#!/bin/sh
-[ -f /etc/config/sms_forwarder ] || exit 0
-i=0
-while uci -q get "sms_forwarder.@sms_forward_instance[$i]" >/dev/null 2>&1; do
-  s="sms_forwarder.@sms_forward_instance[$i]"
-  if [ "$(uci -q get "$s.enable")" = "1" ] && [ -z "$(uci -q get "$s.api_type")" ]; then
-    ac=$(uci -q get "$s.api_config")
-    t=""
-    case "$ac" in
-      *'"bot_token"'*)     t=tgbot ;;
-      *'"pushkey"'*)       t=pushdeer ;;
-      *'"recipient_uri"'*) t=sip ;;
-      *open.feishu.cn*)    t=feishu ;;
-      *'"token"'*)         t=serverchan ;;
-      *'"webhook_url"'*)   t=webhook ;;
-    esac
-    [ -n "$t" ] && uci set "$s.api_type=$t"
-  fi
-  i=$((i+1))
-done
-uci commit sms_forwarder
-exit 0
-SMSF
-
 # 3.4 默认简体中文 + 默认主题 Argon（jerrykuku 官方 v3.1.4 / OP 最火主题）
 #     mac 主题已整体移除；feed argon 自带的 30- 抢默认脚本被 30_luci-theme-argon
 #     覆盖为「只注册」，默认统一由本脚本指定，杜绝并行 commit race。
@@ -858,13 +816,9 @@ endg
 # 6) 严格校验：个人精简版正反向双向校验
 # ---------------------------------------------------------------
 group "校验个人精简版包集合"
-# 正向：必须全部入选（QModem 全家 + OpenClash + USB 驱动 + PON 基础 + 中文
-#       + NPU/超频界面 + 短信转发）
+# 正向：必须全部入选（OpenClash + PassWall + PON 基础 + 中文
+#       + NPU/超频界面 + 插件全家桶）
 for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
-         qmodem qfirehose \
-         luci-app-qmodem-next luci-app-qmodem-monitor \
-         luci-app-qmodem-ttlfw4 \
-         sms-forwarder-next \
          luci-app-airoha-npu \
          luci-app-openclash luci-app-passwall luci-i18n-base-zh-cn luci-theme-argon \
          xray-core \
@@ -874,10 +828,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          p910nd luci-app-p910nd luci-i18n-p910nd-zh-cn kmod-usb-printer \
          nfs-kernel-server luci-app-nfs luci-i18n-nfs-zh-cn \
          luci-app-store \
-         udpxy luci-app-udpxy luci-i18n-udpxy-zh-cn \
-         adguardhome luci-app-adguardhome luci-i18n-adguardhome-zh-cn \
-         usb-modeswitch kmod-usb-net-qmi-wwan chat comgt \
-         kmod-usb-serial-sierrawireless kmod-mtk-t7xx kmod-tcp-bbr \
+         kmod-tcp-bbr \
          filebrowser autocore \
          luci-app-cpufreq kmod-crypto-hw-eip93 kmod-cryptodev \
          openssl-util libopenssl-devcrypto \
@@ -920,5 +871,5 @@ if ! grep -q "^CONFIG_LUCI_LANG_zh_Hans=y$" .config; then
   echo "::error::缺少 CONFIG_LUCI_LANG_zh_Hans，中文翻译包不会生效"
   exit 1
 fi
-echo "个人精简版包校验通过（QModem 全功能 v3.2.0 + 短信转发 + OpenClash 无内核 + PassWall 内置 Xray 内核 + ddnsto + USB 驱动 + NPU/超频 + 插件全家桶）"
+echo "个人精简版包校验通过（OpenClash 无内核 + PassWall 内置 Xray 内核 + ddnsto + PON 基础 + NPU/超频 + 插件全家桶）"
 endg
