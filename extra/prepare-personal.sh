@@ -497,21 +497,44 @@ net.ipv4.tcp_wmem = 4096 65536 16777216
 net.netfilter.nf_conntrack_max = 131072
 PROXYTUNE
 
-# 3.x 小包转发调优（92 号段，晚于 91 号通用/代理调优加载）：
+# 3.x 小包转发调优（92 号段，晚于 91 号通用/代理调优加载）
+#     硬件依据：4 核 Cortex-A53 / 512MB RAM / 10G PON + EN8811H 2.5G LAN
 #     netdev_budget/Usecs/backlog：软中断每轮处理预算与积压队列加大，
 #     高 pps（游戏/语音/IPTV 小包）下不丢包不抖动 —— 小包卡顿头号参数
-#     FastOpen/ECN：握手提速 + 拥塞感知；conntrack 超时缩短防表满丢包
+#     fq 队列 + BBR：BBR 官方推荐搭配，降延迟提吞吐（SQM 开 cake 时按口覆盖）
+#     min_free_kbytes：512MB 内存下提高最低保留水位，压力期网络栈不因分配失败丢包
+#     其余：FastOpen/ECN/MTU 探测/长连接/半开队列 —— 代理与 NAT 场景稳定性
 mkdir -p "$OVL/etc/sysctl.d"
 cat > "$OVL/etc/sysctl.d/92-packet-tuning.conf" <<'PKTTUNE'
 net.core.netdev_budget = 1024
 net.core.netdev_budget_usecs = 8000
 net.core.netdev_max_backlog = 8192
+net.core.somaxconn = 4096
+net.core.netdev_tstamp_prequeue = 0
+net.core.rps_sock_flow_entries = 32768
 net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_ecn = 1
+net.ipv4.tcp_mtu_probing = 1
+net.ipv4.tcp_slow_start_after_idle = 0
+net.ipv4.tcp_fin_timeout = 15
+net.ipv4.tcp_keepalive_time = 600
+net.ipv4.tcp_max_syn_backlog = 4096
+net.core.default_qdisc = fq
+vm.min_free_kbytes = 32768
 net.netfilter.nf_conntrack_tcp_timeout_established = 3600
 net.netfilter.nf_conntrack_tcp_timeout_time_wait = 30
 net.netfilter.nf_conntrack_tcp_timeout_close_wait = 30
 PKTTUNE
+
+# 3.x CPU governor 默认 performance：4 核 A53 常开高吞吐/转发场景，
+#     免去空闲降频带来的首包延迟与软中断处理波动（LuCI cpufreq 界面可改回）
+cat > "$OVL/etc/uci-defaults/91-cpu-governor" <<'CPUGOV'
+#!/bin/sh
+for gov in /sys/devices/system/cpu/cpufreq/policy*/scaling_governor; do
+  [ -f "$gov" ] && [ -w "$gov" ] && echo performance > "$gov" 2>/dev/null
+done
+exit 0
+CPUGOV
 
 cat > "$OVL/etc/uci-defaults/98-dns-cache" <<'DNSCACHE'
 uci -q set dhcp.@dnsmasq[0].cachesize='2000'
