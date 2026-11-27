@@ -99,17 +99,22 @@ for f in standard/4.2.8/ddnsto_aarch64.ipk luci-app-ddnsto.ipk luci-i18n-ddnsto-
   fn="$(basename "$f")"
   curl -fsSLk "$DDNSTO_BASE/$f" -o "/tmp/ddnsto-x/$fn" || { echo "::error::ddnsto 下载失败: $fn"; exit 1; }
   [ -s "/tmp/ddnsto-x/$fn" ] || { echo "::error::ddnsto 包为空: $fn"; exit 1; }
-  if ar p "/tmp/ddnsto-x/$fn" data.tar.gz > /tmp/ddnsto-x/data.tgz 2>/dev/null; then
+  # ipk 实测为 tar.gz 归档（内含 ./data.tar.gz），非 ar 格式；ar 仅作兼容回退
+  if tar -xzf "/tmp/ddnsto-x/$fn" -C /tmp/ddnsto-x 2>/dev/null && [ -f /tmp/ddnsto-x/data.tar.gz ]; then
+    tar -xzf /tmp/ddnsto-x/data.tar.gz -C "$SRC/files" || { echo "::error::ddnsto 解包失败: $fn"; exit 1; }
+  elif ar p "/tmp/ddnsto-x/$fn" data.tar.gz > /tmp/ddnsto-x/data.tgz 2>/dev/null; then
     tar -xzf /tmp/ddnsto-x/data.tgz -C "$SRC/files" || { echo "::error::ddnsto 解包失败: $fn"; exit 1; }
   elif ar p "/tmp/ddnsto-x/$fn" data.tar.xz > /tmp/ddnsto-x/data.txz 2>/dev/null; then
     tar -xJf /tmp/ddnsto-x/data.txz -C "$SRC/files" || { echo "::error::ddnsto 解包失败: $fn"; exit 1; }
   else
     echo "::error::ddnsto ipk 结构异常（无 data.tar.gz/xz）: $fn"; exit 1
   fi
+  rm -rf /tmp/ddnsto-x; mkdir -p /tmp/ddnsto-x
 done
 rm -rf /tmp/ddnsto-x
-# 落地自检：主程序二进制必须在 overlay 中
-[ -f "$SRC/files/usr/bin/ddnsto" ] || { echo "::error::ddnsto 二进制未落入 files/（解包路径异常）"; exit 1; }
+# 落地自检：主程序二进制（实测位于 usr/sbin/）+ init 脚本必须在 overlay 中
+[ -f "$SRC/files/usr/sbin/ddnsto" ] || { echo "::error::ddnsto 二进制未落入 files/（解包路径异常）"; exit 1; }
+[ -f "$SRC/files/etc/init.d/ddnsto" ] || { echo "::error::ddnsto init 脚本未落入 files/"; exit 1; }
 echo "ddnsto 已解包进 rootfs overlay:"
 find "$SRC/files" -path '*ddnsto*' -o -name 'ddnsto' | head -20
 endg
