@@ -727,6 +727,32 @@ uci commit firewall
 exit 0
 ZTEWAN
 
+# 98c) 随身wifi 预置 WAN：usb0 DHCP 接口（RNDIS/ECM 模式插上即出网），
+#     声明式配置——netifd 在设备枚举后自动上线，未插时接口待机不报错；
+#     QMI 模式设备可在 LuCI 里把协议改为 QMI 蜂窝（luci-proto-qmi）。
+cat > "$OVL/etc/uci-defaults/98c-usb-wwan" <<'USBWWAN'
+#!/bin/sh
+case " $(uci -q show network | sed -n 's/^network\.[^.]*=interface$/&/p') " in
+  *usbmodem*) exit 0 ;;
+esac
+uci -q batch <<UCIB
+set network.usbmodem=interface
+set network.usbmodem.proto='dhcp'
+set network.usbmodem.device='usb0'
+set network.usbmodem.force_link='0'
+UCIB
+WIDX=$(uci show firewall 2>/dev/null | sed -n "s/^firewall\.@zone\[\([0-9]*\)\]\.name='wan'.*/\1/p" | head -1)
+if [ -n "$WIDX" ]; then
+  case " $(uci -q get firewall.@zone[$WIDX].network) " in
+    *" usbmodem "*) ;;
+    *) uci add_list firewall.@zone[$WIDX].network='usbmodem' ;;
+  esac
+fi
+uci commit network
+uci commit firewall
+exit 0
+USBWWAN
+
 # 95-npu-offload：NPU 硬件流卸载默认开启（Airoha PPE + NPU 硬件转发）
 #   flowtable 内核支持由 kmod-nft-offload 提供（上游 airoha generic config
 #   NF_FLOW_TABLE 未编入，必须装包；NET_AIROHA_NPU=y 驱动已内置）。
@@ -946,6 +972,8 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          luci-app-openclash luci-app-passwall luci-i18n-base-zh-cn luci-theme-argon \
          xray-core kmod-nft-offload kmod-nft-tproxy kmod-nft-socket \
          kmod-oaf appfilter luci-app-oaf luci-i18n-oaf-zh-cn luci-lib-jsonc \
+         kmod-usb-net kmod-usb-net-rndis kmod-usb-net-cdc-ecm kmod-usb-net-qmi-wwan \
+         uqmi usb-modeswitch luci-proto-qmi \
          zoneinfo-core zoneinfo-asia \
          luci-app-librespeed librespeed-go \
          zerotier luci-app-zerotier luci-i18n-zerotier-zh-cn \
