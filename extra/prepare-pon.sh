@@ -317,15 +317,19 @@ SYSCTL
 
 cat > "$OVL/etc/hotplug.d/net/20-rps" <<'RPS'
 #!/bin/sh
-# 网卡上线时把 RX 软中断分散到 CPU1-3（4 核取掩码 e，CPU0 留给硬中断）
+# 网卡上线时把 RX 软中断分到 CPU0 以外的所有核（按实际核数自适应：
+# MD/AN7581=4 核 → 掩码 e；MF/AN7583=2 核 → 掩码 2；CPU0 留给硬中断）
 [ "$ACTION" = "add" ] || exit 0
 [ -n "$INTERFACE" ] || exit 0
 [ -d "/sys/class/net/$INTERFACE/queues" ] || exit 0
 case "$INTERFACE" in
   lo|sit*|ip6tnl*|tun*|tap*|wg*|br-*|docker*|veth*) exit 0 ;;
 esac
+ncpu=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)
+[ "$ncpu" -ge 1 ] 2>/dev/null || ncpu=4
+rps_mask=$(printf '%x' $(( (1 << ncpu) - 2 )))
 for q in /sys/class/net/"$INTERFACE"/queues/rx-*/rps_cpus; do
-  [ -w "$q" ] && echo e > "$q" 2>/dev/null
+  [ -w "$q" ] && echo "$rps_mask" > "$q" 2>/dev/null
 done
 for q in /sys/class/net/"$INTERFACE"/queues/rx-*/rps_flow_cnt; do
   [ -w "$q" ] && echo 4096 > "$q" 2>/dev/null
