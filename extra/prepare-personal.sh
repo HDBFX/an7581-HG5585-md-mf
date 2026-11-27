@@ -177,6 +177,39 @@ grep -q "PKG_VERSION:=3" "$PW_THEME_MK" 2>/dev/null || \
 echo "默认主题：Argon（feed 版）"
 endg
 
+# ---------------------------------------------------------------
+# 2.4g) OpenAppFilter（OAF 应用过滤，destan19 官方 master）
+#       家长控制/DPI 应用识别：游戏/视频/聊天/下载分类管控。
+#       仓库三包一体：kmod-oaf（内核模块，DEPENDS kmod-nf-conntrack/reject）
+#       + appfilter（oafd 服务，依赖 libsqlite3/libcurl/libjson-c 等，随依赖自动解析）
+#       + luci-app-oaf（LuCI 界面，自带 po/zh_Hans 中文）。
+#       兼容性：上游 2026-10-27 提交已修复 6.18 内核编译错误，与 ponwrt 内核匹配；
+#       Makefile 用 $(TOPDIR)/feeds/luci/luci.mk 绝对路径，拷入 package/ 无需改。
+#       与 NPU 加速：默认 disable_hnat=0，hnat.sh 直接退出，不动 flow_offloading_hw；
+#       （注：被 NPU 硬件卸载的流 DPI 无法识别，需精确过滤时用户可在防火墙关硬件卸载）
+# ---------------------------------------------------------------
+group "引入 OpenAppFilter (destan19)"
+OAF_DIR="$SRC/package/openappfilter"
+if [ ! -f "$OAF_DIR/luci-app-oaf/Makefile" ]; then
+  rm -rf /tmp/oaf-src
+  git clone --depth 1 https://github.com/destan19/OpenAppFilter.git /tmp/oaf-src || { echo "::error::OpenAppFilter 克隆失败"; exit 1; }
+  mkdir -p "$OAF_DIR"
+  for pkg in oaf open-app-filter luci-app-oaf; do
+    cp -a "/tmp/oaf-src/$pkg" "$OAF_DIR/" || { echo "::error::OAF 拷入 $pkg 失败"; exit 1; }
+  done
+  rm -rf /tmp/oaf-src
+fi
+# 结构自检：内核模块/服务/界面/特征库/中文翻译缺一不可
+test -f "$OAF_DIR/oaf/Makefile" && test -f "$OAF_DIR/open-app-filter/Makefile" \
+  && test -f "$OAF_DIR/luci-app-oaf/Makefile" \
+  && test -f "$OAF_DIR/open-app-filter/files/feature.bin" \
+  && test -d "$OAF_DIR/luci-app-oaf/po/zh_Hans" \
+  || { echo "::error::OpenAppFilter 源码结构不完整"; exit 1; }
+grep -q 'feeds/luci/luci.mk' "$OAF_DIR/luci-app-oaf/Makefile" || {
+  echo "::error::luci-app-oaf Makefile include 非绝对路径，需修复"; exit 1; }
+echo "OpenAppFilter 三包就绪（kmod-oaf + appfilter + luci-app-oaf 含中文）"
+endg
+
 # 2.4c) autocore 重新引入：fork 主页温度/频率/架构 rpcd 读数的 ACL（luci-mod-status-autocore.json）
 #       与 /sbin/cpuinfo、/sbin/tempinfo 都由该包提供，个人版此前误删导致概览页三项显示 ?；
 #       包本身是纯脚本（含与 overlay 同名文件，overlay files/ 优先级更高，无冲突）
@@ -877,6 +910,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          luci-app-airoha-npu \
          luci-app-openclash luci-app-passwall luci-i18n-base-zh-cn luci-theme-argon \
          xray-core kmod-nft-offload kmod-nft-tproxy kmod-nft-socket \
+         kmod-oaf appfilter luci-app-oaf luci-i18n-oaf-zh-cn luci-lib-jsonc \
          zoneinfo-core zoneinfo-asia \
          luci-app-librespeed librespeed-go \
          zerotier luci-app-zerotier luci-i18n-zerotier-zh-cn \
