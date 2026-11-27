@@ -85,6 +85,15 @@ grep -q 'devmem' "$NPU_DIR/root/usr/libexec/rpcd/luci.airoha_npu" || {
   exit 1
 }
 echo "luci-app-airoha-npu rchen14b 版就绪（含超频）"
+# 注入中文翻译（rchen14b 上游只有西语 po）：po/zh_Hans 使构建系统生成
+# luci-i18n-airoha-npu-zh-cn 包（seed 显式 =y）。msgid 与 view JS _() 内字符串
+# 逐字节一致（含后端返回状态词 Active/Idle 等），与个人版同源文件。
+mkdir -p "$NPU_DIR/po/zh_Hans" "$NPU_DIR/luci-app-airoha-npu/po/zh_Hans"
+cp "$REPO/extra/files/npu-zh.po" "$NPU_DIR/po/zh_Hans/luci-app-airoha-npu.po"
+cp "$REPO/extra/files/npu-zh.po" "$NPU_DIR/luci-app-airoha-npu/po/zh_Hans/luci-app-airoha-npu.po"
+grep -q 'msgstr "CPU 频率"' "$NPU_DIR/po/zh_Hans/luci-app-airoha-npu.po" || {
+  echo "::error::npu 中文 po 注入失败"; exit 1; }
+echo "luci-app-airoha-npu 中文翻译已注入"
 endg
 
 # ---------------------------------------------------------------
@@ -431,7 +440,7 @@ LANG
 #   背景（2026-11-26 设备实测）：PassWall 默认 remote_dns=1.1.1.1 → chinadns-ng
 #   trust-dns tcp://1.1.1.1；部分机房对 CF 1.1.1.0/24 anycast 路由黑洞
 #   （1.1.1.1/1.0.0.1:443 超时，8.8.4.4:443 正常）→ 境外域名解析挂起 =「没网」。
-#   正式版首启时 /etc/config/passwall 尚不存在（用户后期经 iStore/opkg 自装），
+#   O26 首启时 /etc/config/passwall 尚不存在（用户后期经 apk/iStore 自装），
 #   uci-defaults 直接改不了 → 改为把自愈块写进 /etc/rc.local：
 #   每次开机 90 秒后检测一次，装了 PassWall 且远程 DNS 仍为默认值（空/1.1.1.1/
 #   带前缀默认）则改为 8.8.8.8 并重启 PassWall；用户自定义 DNS 永不覆盖。
@@ -617,7 +626,7 @@ group "校验个人光猫专版包集合"
 # 正向：必须全部入选（PON/ONU 核心 + NPU/超频 + 中文 + BBR）
 for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug zoneinfo-core zoneinfo-asia \
          luci-app-airoha-npu \
-         luci-i18n-base-zh-cn kmod-tcp-bbr autocore; do
+         luci-i18n-base-zh-cn luci-i18n-airoha-npu-zh-cn kmod-tcp-bbr autocore; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人光猫专版缺少 ${p}"
     exit 1
