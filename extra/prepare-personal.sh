@@ -85,19 +85,33 @@ endg
 # ---------------------------------------------------------------
 # 2.4b) ddnsto 内网穿透（koolcenter 官方闭源 ipk，中文界面）
 #       替换原 Tailscale：国内服务直连、微信扫码绑定、无需公网 IP。
-#       集成方式：构建时下载三个 ipk 进 rootfs(/root/)，uci-defaults
-#       首次开机 opkg 离线安装并自启（预编译闭源包无法走 buildroot feeds）。
+#       集成方式：构建时下载 ipk 并解包进 files/ overlay 直接编进 rootfs
+#       （固件为 APK 包管理无 opkg，运行时安装 ipk 不可行）。
 # ---------------------------------------------------------------
-group "下载 ddnsto 离线包"
+group "下载并解包 ddnsto 离线包"
 DDNSTO_BASE="http://fw.koolcenter.com/binary/ddnsto/openwrt"
-mkdir -p "$SRC/files/root"
+# 本固件基于 APK 包管理（USE_APK default y，固件内无 opkg），不能像旧版那样
+# 在首次开机用 opkg 装 ipk（会静默失败 → ddnsto 永远装不上、ipk 白占 /root）。
+# 改为构建期直接解包 ipk（ar 归档内 data.tar.gz/xz）落进 files/ overlay，
+# 与普通包一致直接编进 rootfs，运行时零依赖。
+mkdir -p "$SRC/files" /tmp/ddnsto-x
 for f in standard/4.2.8/ddnsto_aarch64.ipk luci-app-ddnsto.ipk luci-i18n-ddnsto-zh-cn.ipk; do
   fn="$(basename "$f")"
-  curl -fsSLk "$DDNSTO_BASE/$f" -o "$SRC/files/root/$fn" || { echo "::error::ddnsto 下载失败: $fn"; exit 1; }
-  [ -s "$SRC/files/root/$fn" ] || { echo "::error::ddnsto 包为空: $fn"; exit 1; }
+  curl -fsSLk "$DDNSTO_BASE/$f" -o "/tmp/ddnsto-x/$fn" || { echo "::error::ddnsto 下载失败: $fn"; exit 1; }
+  [ -s "/tmp/ddnsto-x/$fn" ] || { echo "::error::ddnsto 包为空: $fn"; exit 1; }
+  if ar p "/tmp/ddnsto-x/$fn" data.tar.gz > /tmp/ddnsto-x/data.tgz 2>/dev/null; then
+    tar -xzf /tmp/ddnsto-x/data.tgz -C "$SRC/files" || { echo "::error::ddnsto 解包失败: $fn"; exit 1; }
+  elif ar p "/tmp/ddnsto-x/$fn" data.tar.xz > /tmp/ddnsto-x/data.txz 2>/dev/null; then
+    tar -xJf /tmp/ddnsto-x/data.txz -C "$SRC/files" || { echo "::error::ddnsto 解包失败: $fn"; exit 1; }
+  else
+    echo "::error::ddnsto ipk 结构异常（无 data.tar.gz/xz）: $fn"; exit 1
+  fi
 done
-ls -lh "$SRC/files/root/" | grep ipk
-echo "ddnsto 三个离线包就绪（客户端 4.2.8 + LuCI 界面 + 中文包）"
+rm -rf /tmp/ddnsto-x
+# 落地自检：主程序二进制必须在 overlay 中
+[ -f "$SRC/files/usr/bin/ddnsto" ] || { echo "::error::ddnsto 二进制未落入 files/（解包路径异常）"; exit 1; }
+echo "ddnsto 已解包进 rootfs overlay:"
+find "$SRC/files" -path '*ddnsto*' -o -name 'ddnsto' | head -20
 endg
 
 # ---------------------------------------------------------------
@@ -434,17 +448,9 @@ echo "$INJECTED" | grep -q "FW_BUILD_TIME = '20" || { echo "::error::固件编�
 # 3.1c 远程访问：Tailscale 默认开机自启（首次需在 LuCI → 服务 → Tailscale 登录账号）
 cat > "$OVL/etc/uci-defaults/99-ddnsto" <<'TS'
 #!/bin/sh
-# 首次开机安装 ddnsto 离线包（闭源预编译 ipk 无法走 buildroot feeds）
-# 安装顺序：主程序 → LuCI 界面 → 中文语言包，然后注册开机自启
-opkg install /root/ddnsto_aarch64.ipk 2>/dev/null
-opkg install /root/luci-app-ddnsto.ipk 2>/dev/null
-opkg install /root/luci-i18n-ddnsto-zh-cn.ipk 2>/dev/null
-if command -v ddnsto >/dev/null 2>&1; then
-  /etc/init.d/ddnsto enable 2>/dev/null || true
-  rm -f /root/ddnsto_aarch64.ipk /root/luci-app-ddnsto.ipk /root/luci-i18n-ddnsto-zh-cn.ipk
-else
-  logger -t ddnsto "离线安装失败，ipk 保留在 /root/ 供手动排查"
-fi
+# ddnsto 已在构建期解包进 rootfs（固件为 APK 包管理，无 opkg），
+# 这里只负责注册开机自启（幂等）。
+[ -x /etc/init.d/ddnsto ] && /etc/init.d/ddnsto enable
 exit 0
 TS
 
@@ -509,7 +515,7 @@ net.netfilter.nf_conntrack_max = 131072
 PROXYTUNE
 
 # 3.x 小包转发调优（92 号段，晚于 91 号通用/代理调优加载）
-#     硬件依据：4 核 Cortex-A53 / 512MB RAM / 10G PON + EN8811H 2.5G LAN
+#     硬件依据：MD=AN7581 4 核 / MF=AN7583 2 核 / 512MB RAM / 10G PON + EN8811H 2.5G LAN
 #     netdev_budget/Usecs/backlog：软中断每轮处理预算与积压队列加大，
 #     高 pps（游戏/语音/IPTV 小包）下不丢包不抖动 —— 小包卡顿头号参数
 #     fq 队列 + BBR：BBR 官方推荐搭配，降延迟提吞吐（SQM 开 cake 时按口覆盖）
@@ -536,7 +542,7 @@ net.netfilter.nf_conntrack_tcp_timeout_time_wait = 30
 net.netfilter.nf_conntrack_tcp_timeout_close_wait = 30
 PKTTUNE
 
-# 3.x CPU governor 默认 performance：4 核 A53 常开高吞吐/转发场景，
+# 3.x CPU governor 默认 performance：A53 常开高吞吐/转发场景（MD 4 核/MF 2 核），
 #     免去空闲降频带来的首包延迟与软中断处理波动（LuCI cpufreq 界面可改回）
 cat > "$OVL/etc/uci-defaults/91-cpu-governor" <<'CPUGOV'
 #!/bin/sh
@@ -870,7 +876,7 @@ group "校验个人精简版包集合"
 for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
          luci-app-airoha-npu \
          luci-app-openclash luci-app-passwall luci-i18n-base-zh-cn luci-theme-argon \
-         xray-core \
+         xray-core kmod-nft-offload kmod-nft-tproxy kmod-nft-socket \
          zoneinfo-core zoneinfo-asia \
          luci-app-librespeed librespeed-go \
          zerotier luci-app-zerotier luci-i18n-zerotier-zh-cn \
