@@ -494,8 +494,24 @@ net.core.wmem_max = 16777216
 net.ipv4.tcp_rmem = 4096 131072 16777216
 net.ipv4.tcp_wmem = 4096 65536 16777216
 # conntrack：代理 UDP/QUIC 海量短连接
-net.netfilter.nf_conntrack_max = 65536
+net.netfilter.nf_conntrack_max = 131072
 PROXYTUNE
+
+# 3.x 小包转发调优（92 号段，晚于 91 号通用/代理调优加载）：
+#     netdev_budget/Usecs/backlog：软中断每轮处理预算与积压队列加大，
+#     高 pps（游戏/语音/IPTV 小包）下不丢包不抖动 —— 小包卡顿头号参数
+#     FastOpen/ECN：握手提速 + 拥塞感知；conntrack 超时缩短防表满丢包
+mkdir -p "$OVL/etc/sysctl.d"
+cat > "$OVL/etc/sysctl.d/92-packet-tuning.conf" <<'PKTTUNE'
+net.core.netdev_budget = 1024
+net.core.netdev_budget_usecs = 8000
+net.core.netdev_max_backlog = 8192
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_ecn = 1
+net.netfilter.nf_conntrack_tcp_timeout_established = 3600
+net.netfilter.nf_conntrack_tcp_timeout_time_wait = 30
+net.netfilter.nf_conntrack_tcp_timeout_close_wait = 30
+PKTTUNE
 
 cat > "$OVL/etc/uci-defaults/98-dns-cache" <<'DNSCACHE'
 uci -q set dhcp.@dnsmasq[0].cachesize='2000'
@@ -840,7 +856,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          sqm-scripts luci-app-sqm luci-i18n-sqm-zh-cn \
          luci-compat luci-app-accesscontrol luci-i18n-accesscontrol-zh-cn \
          luci-app-wechatpush luci-i18n-wechatpush-zh-cn \
-         jq bash iputils-arping; do
+         irqbalance jq bash iputils-arping; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人精简版缺少 ${p}"
     exit 1
