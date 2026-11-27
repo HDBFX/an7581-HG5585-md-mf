@@ -486,6 +486,11 @@ rps_mask=$(printf '%x' $(( (1 << ncpu) - 2 )))
 for q in /sys/class/net/"$INTERFACE"/queues/rx-*/rps_cpus; do
   [ -w "$q" ] && echo "$rps_mask" > "$q" 2>/dev/null
 done
+# 硬中断固定 CPU0（airoha_eth.* 为 QDMA 收包中断；掩码 1 = 仅 CPU0），
+# 与 RPS 掩码互补：硬中断 CPU0 / 软中断分发到其余核 / NPU 卸载流量不进 CPU
+awk -F: '/airoha_eth\./ {gsub(/ +/, "", $1); print $1}' /proc/interrupts 2>/dev/null | while read irq; do
+  [ -f "/proc/irq/$irq/smp_affinity" ] && echo 1 > "/proc/irq/$irq/smp_affinity" 2>/dev/null
+done
 for q in /sys/class/net/"$INTERFACE"/queues/rx-*/rps_flow_cnt; do
   [ -w "$q" ] && echo 4096 > "$q" 2>/dev/null
 done
@@ -884,7 +889,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          sqm-scripts luci-app-sqm luci-i18n-sqm-zh-cn \
          luci-compat luci-app-accesscontrol luci-i18n-accesscontrol-zh-cn \
          luci-app-wechatpush luci-i18n-wechatpush-zh-cn \
-         irqbalance jq bash iputils-arping; do
+         jq bash iputils-arping; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人精简版缺少 ${p}"
     exit 1
