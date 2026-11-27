@@ -477,8 +477,13 @@ cat > "$OVL/etc/hotplug.d/net/20-rps" <<'RPS'
 case "$INTERFACE" in
   lo|sit*|ip6tnl*|tun*|tap*|wg*|br-*|docker*|veth*) exit 0 ;;
 esac
+# 按实际核数自适应：MD(AN7581)=4核 → 掩码 e；MF(AN7583)=2核 → 掩码 2
+# 排除 CPU0（留作硬中断），其余 CPU 全部参与 RPS 软中断分发
+ncpu=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)
+[ "$ncpu" -ge 1 ] 2>/dev/null || ncpu=4
+rps_mask=$(printf '%x' $(( (1 << ncpu) - 2 )))
 for q in /sys/class/net/"$INTERFACE"/queues/rx-*/rps_cpus; do
-  [ -w "$q" ] && echo e > "$q" 2>/dev/null
+  [ -w "$q" ] && echo "$rps_mask" > "$q" 2>/dev/null
 done
 for q in /sys/class/net/"$INTERFACE"/queues/rx-*/rps_flow_cnt; do
   [ -w "$q" ] && echo 4096 > "$q" 2>/dev/null
