@@ -610,14 +610,40 @@ FILEBROWSER
 # 3.2a 下载工具开箱即用：qBittorrent（BT/磁力，WebUI :8080，账号 admin/adminadmin）
 cat > "$OVL/etc/uci-defaults/98-downloader" <<'DOWNLOADER'
 #!/bin/sh
-# qBittorrent：启用，下载目录 /mnt/sda1（与 DiskMan 挂载点一致）
+# qBittorrent：启用；下载目录统一 /mnt/Downloads（见下方 95-nas-autolink
+# 热插拔脚本：任何 U 盘/硬盘自动挂载后该路径自动指到盘上，与盘符无关）
 uci -q set qbittorrent.config.enabled='1'
-uci -q set qbittorrent.config.download_dir='/mnt/sda1'
+uci -q set qbittorrent.config.download_dir='/mnt/Downloads'
 uci -q commit qbittorrent
-# aria2：启用；以 root 运行，避免 aria2 用户对 USB 盘无写权限
+# aria2：启用；以 root 运行，避免 aria2 用户对 USB 盘无写权限；
+# 下载目录同样走 /mnt/Downloads 固定链接
 uci -q set aria2.main.enabled='1'
 uci -q set aria2.main.user='root'
+uci -q set aria2.main.dir='/mnt/Downloads'
 uci -q commit aria2
+# NAS 一条龙热插拔：块设备分区被 blockd 自动挂载后——
+#   1) 盘上建 Downloads 目录；2) /mnt/Downloads 符号链接指向最新挂载的盘；
+#   3) 同名目录在 tmpfs 的残留（qb/aria2 开机 mkdir 所建）被替换为链接，
+#      保证 SMB(nas 共享)、FileBrowser(/mnt)、qBittorrent、aria2 全部即插即用。
+cat > "$OVL/etc/hotplug.d/block/95-nas-autolink" <<'NASLINK'
+#!/bin/sh
+[ "$ACTION" = add ] || exit 0
+case "$DEVNAME" in
+  sd[a-z][0-9]*|nvme*n*|mmcblk*p*) ;;
+  *) exit 0 ;;
+esac
+MNT="/mnt/$DEVNAME"
+# 等待 blockd 完成挂载（最多 10 秒）
+i=0
+while [ ! -d "$MNT" ] && [ $i -lt 10 ]; do sleep 1; i=$((i+1)); done
+[ -d "$MNT" ] || exit 0
+mkdir -p "$MNT/Downloads" 2>/dev/null
+# 若 /mnt/Downloads 是开机时 qb/aria2 在 tmpfs 建的普通目录，先移除再建链接
+[ -L /mnt/Downloads ] || rm -rf /mnt/Downloads
+ln -sfn "$MNT/Downloads" /mnt/Downloads
+logger -t nas-autolink "USB 分区 $DEVNAME 已挂载于 $MNT，/mnt/Downloads -> $MNT/Downloads"
+NASLINK
+chmod +x "$OVL/etc/hotplug.d/block/95-nas-autolink"
 exit 0
 DOWNLOADER
 
