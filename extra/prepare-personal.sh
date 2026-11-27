@@ -112,8 +112,10 @@ for f in standard/4.2.8/ddnsto_aarch64.ipk luci-app-ddnsto.ipk luci-i18n-ddnsto-
   rm -rf /tmp/ddnsto-x; mkdir -p /tmp/ddnsto-x
 done
 rm -rf /tmp/ddnsto-x
-# 落地自检：主程序二进制（实测位于 usr/sbin/）+ init 脚本必须在 overlay 中
-[ -f "$SRC/files/usr/sbin/ddnsto" ] || { echo "::error::ddnsto 二进制未落入 files/（解包路径异常）"; exit 1; }
+# 落地自检：真实守护进程 ddnstod（常规文件）+ ddnsto 启动符号链接（-f 会解引用
+# 链接目标在构建机上不存在而误报，须用 -L 判定）+ init 脚本
+[ -f "$SRC/files/usr/sbin/ddnstod" ] || { echo "::error::ddnstod 守护进程未落入 files/"; exit 1; }
+[ -L "$SRC/files/usr/sbin/ddnsto" ] || { echo "::error::ddnsto 符号链接未落入 files/"; exit 1; }
 [ -f "$SRC/files/etc/init.d/ddnsto" ] || { echo "::error::ddnsto init 脚本未落入 files/"; exit 1; }
 echo "ddnsto 已解包进 rootfs overlay:"
 find "$SRC/files" -path '*ddnsto*' -o -name 'ddnsto' | head -20
