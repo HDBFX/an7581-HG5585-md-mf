@@ -5,7 +5,7 @@ name: 构建 md / mf 个人精简版固件
 #   - PassWall（Xray 核心 + nftables 透明代理，不含 SingBox/SSR 等其他内核）
 #   - 已移除：QModem 全家 / 短信转发 / USB 4G-5G 驱动 / udpxy / AdGuard Home
 #   - 网络调优：BBR + fq + RPS 多核分发(掩码按核数自适应) + 小包转发调优
-#     (92-packet-tuning) + irqbalance 分核 + performance governor + EIP93/NPU
+#     (92-packet-tuning) + 硬中断固定 CPU0(airoha_eth.*) + performance governor + EIP93/NPU
 on:
   workflow_dispatch:
 
@@ -143,4 +143,4 @@ jobs:
           gh release create "$TAG" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "个人版精简固件 $(date +%Y%m%d-%H%M)" \
-            --notes "机型：xg-040g-md (airoha/an7581) / xg-040g-mf (airoha/an7583)；个人精简版：OpenClash（仅插件，不带内核）+ PassWall（Xray 核心 + nftables 透明代理）+ ddnsto + PON 基础栈 + luci-app-airoha-npu（NPU 监控/CPU 频率控制/PLL 超频 500-1600MHz，1400MHz 以上为超频档注意稳定性）+ Argon 主题（默认）+ 插件全家桶（iStore/SMB/FileBrowser/qBittorrent/aria2/NFS/USB打印共享/LibreSpeed/ZeroTier/SQM/WOL/UPnP/NLBW/访问控制/微信推送/硬盘休眠等）+ 网络调优（BBR+fq/RPS 多核分发按核数自适应/小包转发 92-packet-tuning/irqbalance/performance governor/EIP93 硬件加密/conntrack 调优）+ htop；已移除 QModem/短信转发/USB 4G-5G 驱动/udpxy/AdGuard Home；固件批次 P26。" || true
+            --notes "机型：xg-040g-md (airoha/an7581) / xg-040g-mf (airoha/an7583)；个人精简版：OpenClash（仅插件，不带内核）+ PassWall（Xray 核心 + nftables 透明代理）+ ddnsto + PON 基础栈 + luci-app-airoha-npu（NPU 监控/CPU 频率控制/PLL 超频 500-1600MHz，1400MHz 以上为超频档注意稳定性）+ Argon 主题（默认）+ 插件全家桶（iStore/SMB/FileBrowser/qBittorrent/aria2/NFS/USB打印共享/LibreSpeed/ZeroTier/SQM/WOL/UPnP/NLBW/访问控制/微信推送/硬盘休眠等）+ 网络调优（BBR+fq/RPS 多核分发按核数自适应/小包转发 92-packet-tuning/硬中断固定CPU0/performance governor/EIP93 硬件加密/conntrack 调优）+ htop；已移除 QModem/短信转发/USB 4G-5G 驱动/udpxy/AdGuard Home；固件批次 P26。" || true
