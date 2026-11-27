@@ -629,7 +629,9 @@ cat > "$OVL/etc/hotplug.d/block/95-nas-autolink" <<'NASLINK'
 #!/bin/sh
 [ "$ACTION" = add ] || exit 0
 case "$DEVNAME" in
-  sd[a-z][0-9]*|nvme*n*|mmcblk*p*) ;;
+  # 分区（sda1）+ 整盘无分区格式化（sda / nvme0n1 / mmcblk0）都认，
+  # 覆盖 U 盘/UFS 盒子/移动 SSD 常见的 superfloppy 整盘格式
+  sd[a-z][0-9]*|sd[a-z]|nvme*[0-9]n[0-9]*|mmcblk[0-9]*) ;;
   *) exit 0 ;;
 esac
 MNT="/mnt/$DEVNAME"
