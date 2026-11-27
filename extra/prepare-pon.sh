@@ -341,8 +341,21 @@ net.core.wmem_max = 16777216
 net.ipv4.tcp_rmem = 4096 131072 16777216
 net.ipv4.tcp_wmem = 4096 65536 16777216
 # conntrack：大流量 NAT/转发场景
-net.netfilter.nf_conntrack_max = 65536
+net.netfilter.nf_conntrack_max = 131072
 NETTUNE
+
+# 3.2b 小包转发调优：软中断每轮处理预算与积压队列加大，高 pps
+#      （游戏/语音/IPTV 小包）下不丢包不抖动；FastOpen/ECN + conntrack 超时
+cat > "$OVL/etc/sysctl.d/92-packet-tuning.conf" <<'PKTTUNE'
+net.core.netdev_budget = 1024
+net.core.netdev_budget_usecs = 8000
+net.core.netdev_max_backlog = 8192
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_ecn = 1
+net.netfilter.nf_conntrack_tcp_timeout_established = 3600
+net.netfilter.nf_conntrack_tcp_timeout_time_wait = 30
+net.netfilter.nf_conntrack_tcp_timeout_close_wait = 30
+PKTTUNE
 
 cat > "$OVL/etc/uci-defaults/98-dns-cache" <<'DNSCACHE'
 uci -q set dhcp.@dnsmasq[0].cachesize='2000'
@@ -575,7 +588,7 @@ group "校验个人光猫专版包集合"
 # 正向：必须全部入选（PON/ONU 核心 + NPU/超频 + 中文 + BBR）
 for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug zoneinfo-core zoneinfo-asia \
          luci-app-airoha-npu \
-         luci-i18n-base-zh-cn kmod-tcp-bbr autocore; do
+         luci-i18n-base-zh-cn kmod-tcp-bbr autocore irqbalance; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人光猫专版缺少 ${p}"
     exit 1
