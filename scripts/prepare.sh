@@ -32,6 +32,18 @@ group "克隆 pbs05/ponwrt"
 git clone --depth 1 https://github.com/pbs05/ponwrt.git "$SRC"
 cd "$SRC"
 
+# 出厂默认 LAN IP 写进配置生成器（不使用 uci-defaults）：
+#   config_generate 生成固件自带的 /etc/config/network 默认值，新装/重置后
+#   LAN 直接就是 192.168.2.1；保留配置升级时 sysupgrade 回写用户的
+#   /etc/config/network，config_generate 不参与生成——用户已改的 LAN IP
+#   不会被覆盖回默认（修复「升级后网关被重置」）。
+CG="$SRC/package/base-files/files/bin/config_generate"
+[ -f "$CG" ] || { echo "::error::config_generate 不存在"; exit 1; }
+sed -i 's|ipaddr:-"192.168.1.1"|ipaddr:-"192.168.2.1"|' "$CG"
+grep -q 'ipaddr:-"192.168.2.1"' "$CG" || {
+  echo "::error::config_generate 默认 LAN IP patch 失败"; exit 1; }
+echo "config_generate 出厂 LAN IP → 192.168.2.1"
+
 # 编译缓存：dl（源码包）与 ccache（目标文件）放在源码树之外，
 # 由 GitHub Actions cache 在构建之间复用。软链给 make 用。
 # git clone 出来的目录里没有 dl/.ccache，软链不会覆盖已有内容。
@@ -196,6 +208,14 @@ grep -q 'devmem' "$NPU_DIR/root/usr/libexec/rpcd/luci.airoha_npu" || {
   exit 1
 }
 echo "luci-app-airoha-npu 已覆盖为 rchen14b 版（含 PLL 超频 500-1600MHz）"
+# 注入中文翻译（rchen14b 上游只有西语 po）：po/zh_Hans 使构建系统生成
+# luci-i18n-airoha-npu-zh-cn 包（seed 显式 =y，与 wol/smartdns 同模式）。
+mkdir -p "$NPU_DIR/po/zh_Hans" "$NPU_DIR/luci-app-airoha-npu/po/zh_Hans"
+cp "$REPO/extra/files/npu-zh.po" "$NPU_DIR/po/zh_Hans/luci-app-airoha-npu.po"
+cp "$REPO/extra/files/npu-zh.po" "$NPU_DIR/luci-app-airoha-npu/po/zh_Hans/luci-app-airoha-npu.po"
+grep -q 'msgstr "CPU 频率"' "$NPU_DIR/po/zh_Hans/luci-app-airoha-npu.po" || {
+  echo "::error::npu 中文 po 注入失败"; exit 1; }
+echo "luci-app-airoha-npu 中文翻译已注入"
 endg
 
 # ---------------------------------------------------------------
@@ -204,6 +224,23 @@ endg
 group "注入机型定制 ($MODEL)"
 OVL="$SRC/files"
 mkdir -p "$OVL/etc/uci-defaults" "$OVL/etc/openclash/core"
+
+# ---------------------------------------------------------------
+# 3.0a NPU 硬件流卸载默认开启（Airoha PPE + NPU 硬件转发）
+#   flowtable 内核支持由 kmod-nft-offload 提供（上游 airoha generic config
+#   NF_FLOW_TABLE 未编入，必须装包；NET_AIROHA_NPU=y 驱动已内置）。
+#   开启后 forward 链直连流量经 PPE/NPU 硬件转发；PassWall 代理流量在
+#   mangle/nat prerouting 即被 REDIRECT/TPROXY 到本机终结，不进 forward
+#   链，不受卸载影响。uci-defaults 仅刷机后首次开机执行，用户之后手动
+#   关闭不会被回写。
+# ---------------------------------------------------------------
+cat > "$OVL/etc/uci-defaults/95-npu-offload" <<'NPUOFF'
+#!/bin/sh
+uci -q set firewall.@defaults[0].flow_offloading='1'
+uci -q set firewall.@defaults[0].flow_offloading_hw='1'
+uci -q commit firewall
+exit 0
+NPUOFF
 
 # ---------------------------------------------------------------
 # 3.0 默认时区：中国标准时间（Asia/Shanghai UTC+8）+ 国内 NTP
@@ -229,8 +266,9 @@ TZ
 #     autocore 只在 ipq*/mediatek*/qualcommax* 安装这两个脚本，airoha 不在其列，
 #     因此直接从本仓库 overlay 注入，不引入 autocore 包、不改 .config。
 mkdir -p "$OVL/sbin"
-install -m 0755 "$REPO/config/overlay/sbin/cpuinfo"  "$OVL/sbin/cpuinfo"
-install -m 0755 "$REPO/config/overlay/sbin/tempinfo" "$OVL/sbin/tempinfo"
+install -m 0755 "$REPO/config/overlay/sbin/cpuinfo"      "$OVL/sbin/cpuinfo"
+install -m 0755 "$REPO/config/overlay/sbin/tempinfo"     "$OVL/sbin/tempinfo"
+install -m 0755 "$REPO/config/overlay/sbin/cpufreq_real" "$OVL/sbin/cpufreq_real"
 
 # 3.5 网络转发调优（PPE 未生效，转发全靠 CPU，这里榨多核）
 #     RPS：把网卡 RX 软中断从 CPU0 分散到 CPU1-3；RFS 按 socket 流建哈希。
@@ -376,23 +414,9 @@ nobody:*:0:0:99999:7:::
 ntp:*:0:0:99999:7:::
 SHADOW
 
-# 3.2 登录 IP 192.168.2.1 —— 修复「固件升级后网关被重置回出厂值」bug
-#     根因：uci-defaults 属固件层，sysupgrade 后首次开机会重新执行，原脚本
-#     无条件 uci set，把用户改过的 LAN IP 覆盖回 192.168.2.1。
-#     修复：用 network.lan.fw_lanip_set 作一次性标记（随 sysupgrade 配置备份
-#     保留），升级后标记仍在 → 跳过，保留用户网关；仅全新刷机（无标记）才写入。
-cat > "$OVL/etc/uci-defaults/99-lan-ip" <<'LANIP'
-#!/bin/sh
-# 已应用过出厂 LAN IP 定制（标记随 sysupgrade 配置备份保留）→ 升级场景跳过
-[ "$(uci -q get network.lan.fw_lanip_set)" = "1" ] && exit 0
-uci -q batch <<'UCIBATCH'
-set network.lan.ipaddr='192.168.2.1'
-set network.lan.netmask='255.255.255.0'
-set network.lan.fw_lanip_set='1'
-commit network
-UCIBATCH
-exit 0
-LANIP
+# 3.2 登录 IP 192.168.2.1 —— 已移入 config_generate（clone 段 patch）：
+#     出厂默认直接生成在固件 /etc/config/network 里，不再用 uci-defaults；
+#     保留配置升级时用户改过的 LAN IP 不会被覆盖回默认。
 
 # 3.3 WiFi：hg5585f 系列与 HM2004-DU，SSID 以机型命名(HG5585F-CT / HM2004-DU ...)，密码八个 8
 #     不是 hg5585f/hm2004 的机型(如 xg-040g 系列)则跳过
@@ -490,43 +514,6 @@ uci get luci.themes.Argon >/dev/null 2>&1 || \
 uci -q set luci.themes.Argon=/luci-static/argon
 exit 0
 ARGONFIX
-# ---------------------------------------------------------------
-# SSH 首启修复：界面显示「已启用」但 22 端口连不上，须在 LuCI 里
-#   取消勾选保存、再重新勾选保存才能连 —— 全版本共性问题。
-#   根因（上游 pbs05/ponwrt）：其 dropbear.config 额外加了
-#     option DirectInterface 'lan'   （OpenWrt 官方默认无此项）
-#   dropbear.init 的 boot() 会置 BOOT=1；首启时 lan 尚未 up，
-#   dropbear_instance() 里「network_is_up 失败 && BOOT 非空 → return 0」
-#   直接跳过启动。再叠加 99-lan-ip 改 LAN IP 触发 netifd 重配，
-#   interface.* trigger 未必补触发 reload → dropbear 始终不监听。
-#   而 LuCI 里 toggle 一次 SSH 会写 /etc/config/dropbear，触发
-#   procd 的 config.change trigger → /etc/init.d/dropbear reload，
-#   此时 BOOT 为空、lan 已 up，服务才起来（所以要 toggle 两次）。
-#   修复：files 层覆盖 /etc/config/dropbear，去掉接口绑定，监听所有地址
-#   （WAN 入站仍由防火墙默认规则拒绝，不额外暴露）；再加 zz-ssh-fix
-#   兜底 ensure enable + 显式拉起服务。files 覆盖仅全新刷机生效
-#   （sysupgrade 会保留 /etc/config），正好对应首刷场景，不动用户后续配置。
-# ---------------------------------------------------------------
-echo "修复 SSH 首启不监听（覆盖 dropbear 配置 + 兜底拉起）"
-mkdir -p "$OVL/etc/config"
-cat > "$OVL/etc/config/dropbear" <<'DROPBEARCFG'
-config dropbear main
-	option enable '1'
-	option PasswordAuth 'on'
-	option RootPasswordAuth 'on'
-	option Port '22'
-DROPBEARCFG
-cat > "$OVL/etc/uci-defaults/zz-ssh-fix" <<'SSHFIX'
-#!/bin/sh
-# 幂等兜底：确保自启链接存在，并在首启显式拉起 dropbear；
-# 不改动用户自定义的密码认证 / 端口 / 绑定接口等值。
-[ -f /etc/config/dropbear ] || exit 0
-/etc/init.d/dropbear enable 2>/dev/null || true
-/etc/init.d/dropbear reload 2>/dev/null \
-  || /etc/init.d/dropbear restart 2>/dev/null \
-  || /etc/init.d/dropbear start 2>/dev/null || true
-exit 0
-SSHFIX
 chmod +x "$OVL/etc/uci-defaults/"*
 endg
 
