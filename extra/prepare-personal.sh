@@ -470,7 +470,8 @@ SYSCTL
 
 cat > "$OVL/etc/hotplug.d/net/20-rps" <<'RPS'
 #!/bin/sh
-# 网卡上线时把 RX 软中断分散到 CPU1-3（4 核取掩码 e，CPU0 留给硬中断）
+# 网卡上线时把 RX 软中断分到 CPU0 以外的所有核（按实际核数自适应：
+# MD/AN7581=4 核 → 掩码 e；MF/AN7583=2 核 → 掩码 2；CPU0 留给硬中断）
 [ "$ACTION" = "add" ] || exit 0
 [ -n "$INTERFACE" ] || exit 0
 [ -d "/sys/class/net/$INTERFACE/queues" ] || exit 0
@@ -516,7 +517,6 @@ net.core.netdev_budget_usecs = 8000
 net.core.netdev_max_backlog = 8192
 net.core.somaxconn = 4096
 net.core.netdev_tstamp_prequeue = 0
-net.core.rps_sock_flow_entries = 32768
 net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_ecn = 1
 net.ipv4.tcp_mtu_probing = 1
