@@ -590,6 +590,14 @@ vm.min_free_kbytes = 32768
 net.netfilter.nf_conntrack_tcp_timeout_established = 3600
 net.netfilter.nf_conntrack_tcp_timeout_time_wait = 30
 net.netfilter.nf_conntrack_tcp_timeout_close_wait = 30
+# ---- USB 存储写入调优：脏页回写平滑（SMB/qB/aria2 写盘不再长卡顿） ----
+# 默认 dirty_ratio=20%（512MB 内存约 100MB）：攒满 100MB 脏页后内核集中回写，
+# USB 盘带宽有限 → SMB 拷贝/下载周期性整段停顿。改为字节限：
+# 超过 16MB 起后台持续回写、64MB 强制同步回写，写速曲线平直、无阶梯卡顿
+vm.dirty_background_bytes = 16777216
+vm.dirty_bytes = 67108864
+vm.dirty_writeback_centisecs = 500
+vm.dirty_expire_centisecs = 3000
 PKTTUNE
 
 # 3.x CPU governor 默认 performance：A53 常开高吞吐/转发场景（MD 4 核/MF 2 核），
@@ -638,6 +646,25 @@ uci -q commit aria2
 #   1) 盘上建 Downloads 目录；2) /mnt/Downloads 符号链接指向最新挂载的盘；
 #   3) 同名目录在 tmpfs 的残留（qb/aria2 开机 mkdir 所建）被替换为链接，
 #      保证 SMB(nas 共享)、FileBrowser(/mnt)、qBittorrent、aria2 全部即插即用。
+# USB 盘性能预调（在挂载前先对整盘设置，分区事件不重复设）：
+#   预读 2MB（默认 128KB：顺序读/SMB 列目录/播放视频吞吐提升明显）；
+#   IO 调度器 mq-deadline（HDD 顺序化写、flash 延迟折中，优于默认 none）。
+cat > "$OVL/etc/hotplug.d/block/93-usb-disk-tune" <<'USBDISK'
+#!/bin/sh
+[ "$ACTION" = add ] || exit 0
+# 只对整盘设备生效（sda/nvme0n1/mmcblk0），分区（sda1）事件跳过
+case "$DEVNAME" in
+  sd[a-z]|nvme*[0-9]n[0-9]|mmcblk[0-9]) ;;
+  *) exit 0 ;;
+esac
+Q="/sys/block/$DEVNAME/queue"
+# 预读 2MB（blockdev 单位 512B 扇区）
+blockdev --setra 4096 "/dev/$DEVNAME" 2>/dev/null
+# 调度器：内核可选列表含 mq-deadline 才切换（不支持则保留默认，不报错）
+[ -w "$Q/scheduler" ] && grep -qw 'mq-deadline' "$Q/scheduler" 2>/dev/null \
+  && echo mq-deadline > "$Q/scheduler" 2>/dev/null
+exit 0
+USBDISK
 cat > "$OVL/etc/hotplug.d/block/95-nas-autolink" <<'NASLINK'
 #!/bin/sh
 [ "$ACTION" = add ] || exit 0
