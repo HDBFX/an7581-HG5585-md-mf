@@ -253,6 +253,47 @@ grep -q 'msgstr "CPU 频率"' "$NPU_DIR/po/zh_Hans/luci-app-airoha-npu.po" || {
   echo "::error::npu 中文 po 注入失败"; exit 1; }
 echo "luci-app-airoha-npu 中文翻译已注入"
 
+# 2.5c) miniDLNA 状态页误报修复（sed 见 extra/files/minidlna-status.sed）：
+#   wget 探测失败返回空串被判为"正在运行 0 条音频" → 补判 Audio files 字样。
+MINIDLNA_JS="$SRC/feeds/luci/applications/luci-app-minidlna/htdocs/luci-static/resources/view/status/include/80_minidlna.js"
+[ -f "$MINIDLNA_JS" ] || { echo "::error::未找到 minidlna 状态页 JS：$MINIDLNA_JS"; exit 1; }
+sed -i -f "$REPO/extra/files/minidlna-status.sed" "$MINIDLNA_JS"
+grep -q "Audio files') == -1" "$MINIDLNA_JS" || { echo "::error::minidlna 状态页补丁未生效"; exit 1; }
+echo "luci-app-minidlna 状态页误报修复完成"
+
+# 2.5d) cpufreq 调频策略下拉框中文化 + po 补漏（sed 见 extra/files/cpufreq-js.sed）：
+CPUFREQ_JS="$SRC/feeds/luci/applications/luci-app-cpufreq/htdocs/luci-static/resources/view/cpufreq.js"
+[ -f "$CPUFREQ_JS" ] || { echo "::error::未找到 cpufreq JS：$CPUFREQ_JS"; exit 1; }
+sed -i -f "$REPO/extra/files/cpufreq-js.sed" "$CPUFREQ_JS"
+grep -q "GOV_LABELS\[gov\]" "$CPUFREQ_JS" || { echo "::error::cpufreq 下拉框中文补丁未生效"; exit 1; }
+CPUFREQ_PO="$SRC/feeds/luci/applications/luci-app-cpufreq/po/zh_Hans/cpufreq.po"
+grep -q 'The sampling rate determines' "$CPUFREQ_PO" || cat "$REPO/extra/files/cpufreq-extra-zh.po" >> "$CPUFREQ_PO"
+grep -q '调频器检查并调整' "$CPUFREQ_PO" || { echo "::error::cpufreq po 补充未生效"; exit 1; }
+echo "luci-app-cpufreq 中文化补全完成"
+
+# 2.5e) ONU-IPTV 页 16 条新增文案中文化（po 片段见 extra/files/onu-iptv-zh.po）：
+ONU_PO="$SRC/feeds/onu/luci-app-onu/po/zh_Hans/onu.po"
+[ -f "$ONU_PO" ] || { echo "::error::未找到 onu po：$ONU_PO"; exit 1; }
+grep -q 'Enable PON hardware IGMP snooping' "$ONU_PO" || cat "$REPO/extra/files/onu-iptv-zh.po" >> "$ONU_PO"
+grep -q '启用 PON 硬件 IGMP 侦听' "$ONU_PO" || { echo "::error::onu IPTV po 补充未生效"; exit 1; }
+echo "luci-app-onu IPTV 中文补全完成（16 条）"
+
+# 2.5f) 状态页 CPU 占用虚高修复 v2（区间平均，见 extra/files/cpuusage-rpcd.sed）：
+#   LuCI 总览页 5 秒轮询十几个接口，getCPUUsage 的 top 采样落在刷新风暴
+#   中间，"自己测自己"刷出 20~40% 假占用（实测）。改为调用区间平均脚本
+#   cpuusage_avg：与上次调用做 /proc/stat 差分，覆盖完整轮询周期，
+#   显示真实平均占用 3~5%。
+LUCI_RPCD="$SRC/feeds/luci/modules/luci-base/root/usr/share/rpcd/ucode/luci"
+CPUUSAGE_SH="$SRC/feeds/luci/modules/luci-base/root/usr/bin/cpuusage_avg"
+[ -f "$LUCI_RPCD" ] || { echo "::error::未找到 rpcd ucode：$LUCI_RPCD"; exit 1; }
+grep -q "popen('top" "$LUCI_RPCD" || { echo "::error::rpcd ucode 结构已变（未找到 popen('top）"; exit 1; }
+cp "$REPO/extra/files/cpuusage_avg.sh" "$CPUUSAGE_SH"
+chmod 755 "$CPUUSAGE_SH"
+sed -i -f "$REPO/extra/files/cpuusage-rpcd.sed" "$LUCI_RPCD"
+grep -q '/bin/sh /usr/bin/cpuusage_avg' "$LUCI_RPCD" || { echo "::error::CPU 占用区间平均补丁未生效"; exit 1; }
+sh -n "$CPUUSAGE_SH" || { echo "::error::cpuusage_avg.sh 语法错误"; exit 1; }
+echo "状态页 CPU 占用改为区间平均算法完成"
+
 # 2.5b) NPU 插件本地化补丁 + bug 修复（sed 补丁见 extra/files/npu-*.sed）：
 #   JS：超频确认弹窗硬编码英文 → 中文（未走 _()，po 无效）；
 #       调频策略下拉框内核原文名（performance 等）→ 中文标签（value 不变）
@@ -644,6 +685,12 @@ uci -q set aria2.main.enabled='0'
 uci -q set aria2.main.user='root'
 uci -q set aria2.main.dir='/mnt/Downloads'
 uci -q commit aria2
+# miniDLNA：包安装时 init 会被挂进开机自启链（/etc/rc.d/S*minidlna），
+# 与 LuCI「启用」复选框（只写 UCI）两套开关不同步 → 未勾选也开机运行。
+# 2026-11-28 用户反馈，首次开机与升级后都强制关闭并摘除自启。
+/etc/init.d/minidlna stop 2>/dev/null
+/etc/init.d/minidlna disable 2>/dev/null
+rm -f /etc/rc.d/S*minidlna 2>/dev/null
 # ---- 硬盘保护 #2：定时 sync 落盘保险 ----
 # 虽然脏页 5 秒即开始回写，但突然断电/拔盘仍可能丢失最后几秒数据；
 # 每 5 分钟强制 sync 一次，把暴露窗口压到最小（代价为零——脏页

@@ -1,0 +1,47 @@
+msgid "The IPTV VLANs are carried by the PON uplink and handed over to a set-top box or to a downstream router."
+msgstr "IPTV VLAN 由 PON 上行承载，并交付给机顶盒或下级路由器。"
+
+msgid "Enable PON hardware IGMP snooping"
+msgstr "启用 PON 硬件 IGMP 侦听"
+
+msgid "The PON MAC learns IGMP joins/leaves through a netfilter hook and programs the PPE multicast flow table, so downstream multicast only crosses the PON when a group has members. This runs in parallel with bridge-level snooping and does not interfere with the IGMP proxy."
+msgstr "PON MAC 通过 netfilter 钩子学习 IGMP 加入/离开报文，并将组播流表写入 PPE，只有存在成员的组播组才会在下游经 PON 转发。该机制与桥级侦听并行运行，不会干扰 IGMP 代理。"
+
+msgid "Fast leave"
+msgstr "快速离开"
+
+msgid "Drop the forwarding entry immediately on IGMP Leave, without sending a last-member query. Speeds up channel change but may interrupt a stream if the Leave was for the wrong port."
+msgstr "收到 IGMP Leave 后立即删除转发表项，不再发送 last-member 查询。可加快换台速度，但若 Leave 来自错误端口，可能中断正在观看的节目。"
+
+msgid "Multicast VLAN isolation"
+msgstr "组播 VLAN 隔离"
+
+msgid "Restrict multicast forwarding to the configured multicast VLAN, so IGMP joins on other VLANs do not leak into the multicast flow."
+msgstr "将组播转发限制在已配置的组播 VLAN 内，其他 VLAN 上的 IGMP 加入不会泄漏进组播流。"
+
+msgid "Service VLAN IDs whose multicast traffic may pass the PON. Use 0 for the untagged multicast an enabled IGMP proxy delivers to the LAN. While the list is empty no filtering happens, so at least one entry is needed for isolation to take effect."
+msgstr "允许组播流量通过 PON 的业务 VLAN ID 列表。填 0 表示未打标记的组播（由已启用的 IGMP 代理投递到 LAN）。列表为空时不做任何过滤，因此隔离要生效至少需要一条。"
+
+msgid "Enable bridge IGMP snooping"
+msgstr "启用桥接 IGMP 侦听"
+
+msgid "Isolated multicast VLANs"
+msgstr "隔离的组播 VLAN"
+
+msgid "Live state from airoha-ponctl igmp fwd."
+msgstr "来自 airoha-ponctl igmp fwd 的实时状态。"
+
+msgid "Live state from airoha-ponctl igmp mvlan."
+msgstr "来自 airoha-ponctl igmp mvlan 的实时状态。"
+
+msgid "Live state from airoha-ponctl igmp show."
+msgstr "来自 airoha-ponctl igmp show 的实时状态。"
+
+msgid "PON IGMP module status"
+msgstr "PON IGMP 模块状态"
+
+msgid "PON multicast VLAN table"
+msgstr "PON 组播 VLAN 表"
+
+msgid "PON multicast forwarding table"
+msgstr "PON 组播转发表"

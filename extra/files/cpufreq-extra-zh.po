@@ -1,0 +1,2 @@
+msgid "The sampling rate determines how frequently the governor checks to tune the CPU (ms)"
+msgstr "采样率决定调频器检查并调整 CPU 频率的时间间隔（毫秒）"
