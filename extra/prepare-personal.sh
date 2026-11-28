@@ -676,18 +676,25 @@ KSMBDSHARE
 
 # 2.5G 口并入 LAN 桥：md/mf 的 2.5G RJ45 是独立 GMAC（gdm4），netdev 名 lan1
 # （EN8811H 2500base-x）。上游兜底配置只桥 eth0，lan1 不在任何接口 → 不通。
-# 仅当系统存在 lan1（即 md/mf）时追加；hg5585f 无 lan1 自动跳过。
+# 注意：airoha 以太网驱动 probe 晚，首启 uci-defaults 执行时 lan1 往往还没枚举完
+# （与 98-zte-wan 对 eth1 的实测结论一致，存在性检测会误杀 → 2.5G 口不通）。
+# 改为后台子壳等待 lan1 出现（最多 60 秒）再配置，不阻塞首启；
+# hg5585f 无 lan1，等待超时自动跳过。
 cat > "$OVL/etc/uci-defaults/97-lan25g-bridge" <<'LAN25G'
 #!/bin/sh
-[ -e /sys/class/net/lan1 ] || exit 0
-for d in $(uci -q show network | sed -n 's/^network\.\([^.=]*\)=device$/\1/p'); do
-  [ "$(uci -q get network.$d.name)" = "br-lan" ] || continue
-  case " $(uci -q get network.$d.ports 2>/dev/null) " in
-    *" lan1 "*) ;;
-    *) uci add_list network.$d.ports='lan1' ;;
-  esac
-done
-uci commit network
+(
+  i=0
+  while [ ! -e /sys/class/net/lan1 ] && [ $i -lt 60 ]; do sleep 1; i=$((i+1)); done
+  [ -e /sys/class/net/lan1 ] || exit 0
+  for d in $(uci -q show network | sed -n 's/^network\.\([^.=]*\)=device$/\1/p'); do
+    [ "$(uci -q get network.$d.name)" = "br-lan" ] || continue
+    case " $(uci -q get network.$d.ports 2>/dev/null) " in
+      *" lan1 "*) ;;
+      *) uci add_list network.$d.ports='lan1' ;;
+    esac
+  done
+  uci commit network
+) &
 exit 0
 LAN25G
 
