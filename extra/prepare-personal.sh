@@ -992,21 +992,23 @@ endg
 group "校验个人精简版包集合"
 # 正向：必须全部入选（OpenClash + PassWall + PON 基础 + 中文
 #       + NPU/超频界面 + 插件全家桶）
-for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
-         luci-app-airoha-npu \
-         luci-app-openclash luci-app-passwall luci-i18n-base-zh-cn luci-theme-argon \
+for p in luci-app-onu luci-i18n-onu-zh-cn luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
+         luci-app-airoha-npu luci-i18n-airoha-npu-zh-cn \
+         luci-app-openclash luci-i18n-openclash-zh-cn \
+         luci-app-passwall luci-i18n-passwall-zh-cn \
+         luci-i18n-base-zh-cn luci-theme-argon \
          xray-core kmod-nft-offload kmod-nft-tproxy kmod-nft-socket \
          kmod-usb-net kmod-usb-net-rndis kmod-usb-net-cdc-ether kmod-usb-net-qmi-wwan \
          uqmi usb-modeswitch luci-proto-qmi \
          zoneinfo-core zoneinfo-asia \
-         luci-app-librespeed librespeed-go \
+         luci-app-librespeed luci-i18n-librespeed-zh-cn librespeed-go \
          zerotier luci-app-zerotier luci-i18n-zerotier-zh-cn \
          p910nd luci-app-p910nd luci-i18n-p910nd-zh-cn kmod-usb-printer \
          nfs-kernel-server luci-app-nfs luci-i18n-nfs-zh-cn \
          luci-app-store \
          kmod-tcp-bbr \
          filebrowser autocore \
-         luci-app-cpufreq kmod-crypto-hw-eip93 kmod-cryptodev \
+         luci-app-cpufreq luci-i18n-cpufreq-zh-cn kmod-crypto-hw-eip93 kmod-cryptodev \
          openssl-util libopenssl-devcrypto \
          luci-app-wol luci-i18n-wol-zh-cn \
          smartdns luci-app-smartdns luci-i18n-smartdns-zh-cn \
@@ -1016,6 +1018,8 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          sqm-scripts luci-app-sqm luci-i18n-sqm-zh-cn \
          luci-compat luci-app-accesscontrol luci-i18n-accesscontrol-zh-cn \
          luci-app-wechatpush luci-i18n-wechatpush-zh-cn \
+         luci-i18n-ksmbd-zh-cn luci-i18n-minidlna-zh-cn luci-i18n-diskman-zh-cn \
+         luci-i18n-qbittorrent-zh-cn luci-i18n-aria2-zh-cn \
          jq bash iputils-arping; do
   if ! grep -q "^CONFIG_PACKAGE_${p}=y$" .config; then
     echo "::error::个人精简版缺少 ${p}"
