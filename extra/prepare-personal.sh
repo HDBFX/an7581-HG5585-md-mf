@@ -580,9 +580,10 @@ FILEBROWSER
 # 3.2a 下载工具开箱即用：qBittorrent（BT/磁力，WebUI :8080，账号 admin/adminadmin）
 cat > "$OVL/etc/uci-defaults/98-downloader" <<'DOWNLOADER'
 #!/bin/sh
-# qBittorrent：启用；下载目录统一 /mnt/Downloads（见下方 95-nas-autolink
-# 热插拔脚本：任何 U 盘/硬盘自动挂载后该路径自动指到盘上，与盘符无关）
-uci -q set qbittorrent.config.enabled='1'
+# qBittorrent：默认不自动启动（2026-11-28 用户要求改默认关闭）。
+# 下载目录仍预配置好 /mnt/Downloads（95-nas-autolink 热插拔后自动指到盘上），
+# 需要时在 LuCI「服务 → qBittorrent」勾选启用即可，无需再填目录。
+uci -q set qbittorrent.config.enabled='0'
 uci -q set qbittorrent.config.download_dir='/mnt/Downloads'
 uci -q commit qbittorrent
 # aria2：启用；以 root 运行，避免 aria2 用户对 USB 盘无写权限；
