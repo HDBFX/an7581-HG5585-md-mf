@@ -979,7 +979,7 @@ for p in luci-app-onu luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-d
          luci-app-openclash luci-app-passwall luci-i18n-base-zh-cn luci-theme-argon \
          xray-core kmod-nft-offload kmod-nft-tproxy kmod-nft-socket \
          kmod-oaf appfilter luci-app-oaf luci-i18n-oaf-zh-cn luci-lib-jsonc \
-         kmod-usb-net kmod-usb-net-rndis kmod-usb-net-cdc-ecm kmod-usb-net-qmi-wwan \
+         kmod-usb-net kmod-usb-net-rndis kmod-usb-net-cdc-ether kmod-usb-net-qmi-wwan \
          uqmi usb-modeswitch luci-proto-qmi \
          zoneinfo-core zoneinfo-asia \
          luci-app-librespeed librespeed-go \
