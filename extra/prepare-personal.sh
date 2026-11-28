@@ -642,6 +642,19 @@ uci -q set aria2.main.enabled='0'
 uci -q set aria2.main.user='root'
 uci -q set aria2.main.dir='/mnt/Downloads'
 uci -q commit aria2
+# ---- 硬盘保护 #2：定时 sync 落盘保险 ----
+# 虽然脏页 5 秒即开始回写，但突然断电/拔盘仍可能丢失最后几秒数据；
+# 每 5 分钟强制 sync 一次，把暴露窗口压到最小（代价为零——脏页
+# 早就被回写掉了，sync 基本是空转）。
+cat > "$OVL/etc/uci-defaults/94-data-sync" <<'DATASYNC'
+#!/bin/sh
+CRONTAB=/etc/crontabs/root
+mkdir -p /etc/crontabs
+touch "$CRONTAB"
+grep -q '^\*/5 \* \* \* \* sync$' "$CRONTAB" || echo '*/5 * * * * sync' >> "$CRONTAB"
+/etc/init.d/cron restart 2>/dev/null
+exit 0
+DATASYNC
 # NAS 一条龙热插拔：块设备分区被 blockd 自动挂载后——
 #   1) 盘上建 Downloads 目录；2) /mnt/Downloads 符号链接指向最新挂载的盘；
 #   3) 同名目录在 tmpfs 的残留（qb/aria2 开机 mkdir 所建）被替换为链接，
@@ -663,6 +676,25 @@ blockdev --setra 4096 "/dev/$DEVNAME" 2>/dev/null
 # 调度器：内核可选列表含 mq-deadline 才切换（不支持则保留默认，不报错）
 [ -w "$Q/scheduler" ] && grep -qw 'mq-deadline' "$Q/scheduler" 2>/dev/null \
   && echo mq-deadline > "$Q/scheduler" 2>/dev/null
+# ---- 硬盘保护：把新盘纳入 hd-idle 休眠管理 ----
+# 机械盘 10 分钟无访问自动停转：降热、减磨损、省电（U 盘/SSD 收到停转
+# 指令只是无操作，不受影响）。动态为每个新盘建 hd-idle 段并重启服务，
+# 免去在 LuCI 手动配置；冷插拔（开机已插着的盘）同样会触发本脚本。
+if command -v hd-idle >/dev/null 2>&1; then
+  case "$DEVNAME" in
+    sd*) ;;
+    *) DEVNAME="" ;;  # hd-idle 只认 sdX 命名
+  esac
+  if [ -n "$DEVNAME" ] && ! uci -q show hd-idle | grep -q "disk='$DEVNAME'"; then
+    uci -q add hd-idle hd-idle >/dev/null
+    uci -q set "hd-idle.@hd-idle[-1].disk=$DEVNAME"
+    uci -q set "hd-idle.@hd-idle[-1].enabled=1"
+    uci -q set "hd-idle.@hd-idle[-1].idle_time_interval=10"
+    uci -q set "hd-idle.@hd-idle[-1].idle_time_unit=minutes"
+    uci -q commit hd-idle
+    /etc/init.d/hd-idle restart 2>/dev/null
+  fi
+fi
 exit 0
 USBDISK
 cat > "$OVL/etc/hotplug.d/block/95-nas-autolink" <<'NASLINK'
