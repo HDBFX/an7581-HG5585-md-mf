@@ -108,8 +108,8 @@ CPUFREQ_JS="$SRC/feeds/luci/applications/luci-app-cpufreq/htdocs/luci-static/res
 sed -i -f "$REPO/extra/files/cpufreq-js.sed" "$CPUFREQ_JS"
 grep -q "GOV_LABELS\[gov\]" "$CPUFREQ_JS" || { echo "::error::cpufreq 下拉框中文补丁未生效"; exit 1; }
 CPUFREQ_PO="$SRC/feeds/luci/applications/luci-app-cpufreq/po/zh_Hans/cpufreq.po"
-grep -q 'The sampling rate determines' "$CPUFREQ_PO" || cat "$REPO/extra/files/cpufreq-extra-zh.po" >> "$CPUFREQ_PO"
-grep -q '调频器检查并调整' "$CPUFREQ_PO" || { echo "::error::cpufreq po 补充未生效"; exit 1; }
+# 上游 po 已含该条目中文翻译（msgid 跨行折行，不能简单 grep 追加），仅校验存在：
+grep -q 'The sampling rate determines' "$CPUFREQ_PO" || { echo "::error::cpufreq po 缺采样率条目"; exit 1; }
 echo "luci-app-cpufreq 中文化补全完成"
 
 # 2.5e) ONU-IPTV 页文案中文化（与个人版同源）：
