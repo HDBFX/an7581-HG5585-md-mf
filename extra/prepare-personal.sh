@@ -287,6 +287,7 @@ LUCI_RPCD="$SRC/feeds/luci/modules/luci-base/root/usr/share/rpcd/ucode/luci"
 CPUUSAGE_SH="$SRC/feeds/luci/modules/luci-base/root/usr/bin/cpuusage_avg"
 [ -f "$LUCI_RPCD" ] || { echo "::error::未找到 rpcd ucode：$LUCI_RPCD"; exit 1; }
 grep -q "popen('top" "$LUCI_RPCD" || { echo "::error::rpcd ucode 结构已变（未找到 popen('top）"; exit 1; }
+mkdir -p "$(dirname "$CPUUSAGE_SH")"
 cp "$REPO/extra/files/cpuusage_avg.sh" "$CPUUSAGE_SH"
 chmod 755 "$CPUUSAGE_SH"
 sed -i -f "$REPO/extra/files/cpuusage-rpcd.sed" "$LUCI_RPCD"
