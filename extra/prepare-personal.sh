@@ -625,6 +625,11 @@ DOWNLOADER
 cat > "$OVL/etc/uci-defaults/98-ksmbd-share" <<'KSMBDSHARE'
 #!/bin/sh
 [ -f /etc/config/ksmbd ] || exit 0
+# 幂等保护：已有名为 nas 的共享则跳过。
+# 保留设置升级时 uci-defaults 会重新执行，无保护会每升一级多攒一个重复共享。
+if uci -q show ksmbd | grep -q "\.name='nas'"; then
+  exit 0
+fi
 # 监听 lan 口
 uci -q set ksmbd.@globals[0].interface='lan'
 # 匿名读写共享：force_root 免权限坑，guest_ok 免建用户
