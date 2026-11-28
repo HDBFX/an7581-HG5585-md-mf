@@ -462,6 +462,7 @@ DNSCACHE
 # miniDLNA：init 会被挂进开机自启链，与 LuCI「启用」复选框不同步（未勾选也运行）。
 # 首次开机与升级后都强制关闭并摘除自启。
 cat > "$OVL/etc/uci-defaults/98-minidlna-off" <<'MINIOFF'
+#!/bin/sh
 /etc/init.d/minidlna stop 2>/dev/null
 /etc/init.d/minidlna disable 2>/dev/null
 rm -f /etc/rc.d/S*minidlna 2>/dev/null

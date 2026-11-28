@@ -691,6 +691,9 @@ uci -q commit aria2
 /etc/init.d/minidlna stop 2>/dev/null
 /etc/init.d/minidlna disable 2>/dev/null
 rm -f /etc/rc.d/S*minidlna 2>/dev/null
+exit 0
+DOWNLOADER
+
 # ---- 硬盘保护 #2：定时 sync 落盘保险 ----
 # 虽然脏页 5 秒即开始回写，但突然断电/拔盘仍可能丢失最后几秒数据；
 # 每 5 分钟强制 sync 一次，把暴露窗口压到最小（代价为零——脏页
@@ -766,9 +769,8 @@ mkdir -p "$MNT/Downloads" 2>/dev/null
 ln -sfn "$MNT/Downloads" /mnt/Downloads
 logger -t nas-autolink "USB 分区 $DEVNAME 已挂载于 $MNT，/mnt/Downloads -> $MNT/Downloads"
 NASLINK
-chmod +x "$OVL/etc/hotplug.d/block/95-nas-autolink"
-exit 0
-DOWNLOADER
+chmod +x "$OVL/etc/hotplug.d/block/93-usb-disk-tune" \
+         "$OVL/etc/hotplug.d/block/95-nas-autolink"
 
 # 3.2b SMB 开箱即用（ksmbd 内核态共享）：默认共享 /mnt 匿名读写，
 #     硬盘挂到 /mnt 下后 Windows/手机"网上邻居"直接可见可写，无需建用户。
@@ -795,6 +797,22 @@ uci -q set ksmbd.@share[-1].dir_mask='0777'
 uci -q commit ksmbd
 exit 0
 KSMBDSHARE
+
+# 3.2c NFS 默认关闭（2026-11-28 用户要求）：nfs-kernel-server 安装即自启
+#     （/etc/rc.d/S99nfsd），512MB 内存机型上曾与 miniDLNA 叠加触发 OOM。
+#     默认停用并摘除自启；需要时在 LuCI「NFS 管理页」开启 nfsd，
+#     并同时 /etc/init.d/rpcbind enable（NFS 端口映射依赖 rpcbind）。
+cat > "$OVL/etc/uci-defaults/98-nfs-off" <<'NFSDOFF'
+#!/bin/sh
+/etc/init.d/nfsd stop 2>/dev/null
+/etc/init.d/nfsd disable 2>/dev/null
+rm -f /etc/rc.d/S*nfsd 2>/dev/null
+/etc/init.d/rpcbind stop 2>/dev/null
+/etc/init.d/rpcbind disable 2>/dev/null
+rm -f /etc/rc.d/S*rpcbind 2>/dev/null
+exit 0
+NFSDOFF
+[ -f "$OVL/etc/uci-defaults/98-nfs-off" ] || { echo "::error::98-nfs-off 未生成"; exit 1; }
 
 # 3.3 登录 IP 192.168.2.1 —— 已移入 config_generate（clone 段 patch）：
 #     出厂默认直接生成在固件 /etc/config/network 里，不再用 uci-defaults；
