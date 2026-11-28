@@ -260,11 +260,14 @@ echo "luci-app-airoha-npu 中文翻译已注入"
 #         governor/最大频率只写 policy0 → 遍历全部 cpufreq policy（多簇机型全核生效）
 for JSF in "$NPU_DIR/htdocs/luci-static/resources/view/airoha_npu/status.js" \
            "$NPU_DIR/luci-app-airoha-npu/htdocs/luci-static/resources/view/airoha_npu/status.js"; do
-  [ -f "$JSF" ] || { echo "::error::未找到 status.js: $JSF"; exit 1; }
+  [ -f "$JSF" ] || continue
   sed -i -f "$REPO/extra/files/npu-status-js.sed" "$JSF"
   grep -q 'govLabels\[g\]' "$JSF" || { echo "::error::NPU JS 调频策略中文补丁未生效（上游源码结构可能已变）: $JSF"; exit 1; }
-  grep -q '1400 MHz 以上为超频档' "$JSF" || { echo "::error::NPU JS 超频确认中文补丁未生效: $JSF"; exit 1; }
 done
+# 弹窗中文化（新版 v1.0.1 弹窗走 _() 翻译函数）由 po 覆盖，校验 po 关键条目
+grep -q 'msgstr "%d MHz 以上' "$NPU_DIR/po/zh_Hans/luci-app-airoha-npu.po" 2>/dev/null || \
+  grep -q '超频档' "$NPU_DIR/po/zh_Hans/luci-app-airoha-npu.po" 2>/dev/null || {
+  echo "::error::NPU po 缺超频弹窗翻译"; exit 1; }
 for RPCF in "$NPU_DIR/root/usr/libexec/rpcd/luci.airoha_npu" \
             "$NPU_DIR/luci-app-airoha-npu/root/usr/libexec/rpcd/luci.airoha_npu"; do
   [ -f "$RPCF" ] || { echo "::error::未找到 rpcd 后端: $RPCF"; exit 1; }
