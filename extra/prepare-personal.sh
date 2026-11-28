@@ -265,8 +265,7 @@ for JSF in "$NPU_DIR/htdocs/luci-static/resources/view/airoha_npu/status.js" \
   grep -q 'govLabels\[g\]' "$JSF" || { echo "::error::NPU JS 调频策略中文补丁未生效（上游源码结构可能已变）: $JSF"; exit 1; }
 done
 # 弹窗中文化（新版 v1.0.1 弹窗走 _() 翻译函数）由 po 覆盖，校验 po 关键条目
-grep -q 'msgstr "%d MHz 以上' "$NPU_DIR/po/zh_Hans/luci-app-airoha-npu.po" 2>/dev/null || \
-  grep -q '超频档' "$NPU_DIR/po/zh_Hans/luci-app-airoha-npu.po" 2>/dev/null || {
+grep -q '^msgid "%d MHz is above' "$NPU_DIR/po/zh_Hans/luci-app-airoha-npu.po" 2>/dev/null || {
   echo "::error::NPU po 缺超频弹窗翻译"; exit 1; }
 for RPCF in "$NPU_DIR/root/usr/libexec/rpcd/luci.airoha_npu" \
             "$NPU_DIR/luci-app-airoha-npu/root/usr/libexec/rpcd/luci.airoha_npu"; do
