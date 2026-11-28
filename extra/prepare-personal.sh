@@ -715,6 +715,7 @@ DATASYNC
 # USB 盘性能预调（在挂载前先对整盘设置，分区事件不重复设）：
 #   预读 2MB（默认 128KB：顺序读/SMB 列目录/播放视频吞吐提升明显）；
 #   IO 调度器 mq-deadline（HDD 顺序化写、flash 延迟折中，优于默认 none）。
+mkdir -p "$OVL/etc/hotplug.d/block"
 cat > "$OVL/etc/hotplug.d/block/93-usb-disk-tune" <<'USBDISK'
 #!/bin/sh
 [ "$ACTION" = add ] || exit 0
