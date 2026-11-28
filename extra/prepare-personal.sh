@@ -1055,7 +1055,7 @@ group "校验个人精简版包集合"
 #       + NPU/超频界面 + 插件全家桶）
 for p in luci-app-onu luci-i18n-onu-zh-cn luci-app-pon-status airoha-ponctl airoha-pond airoha-pon-debug \
          luci-app-airoha-npu luci-i18n-airoha-npu-zh-cn \
-         luci-app-openclash luci-i18n-openclash-zh-cn \
+         luci-app-openclash \
          luci-app-passwall luci-i18n-passwall-zh-cn \
          luci-i18n-base-zh-cn luci-theme-argon \
          xray-core kmod-nft-offload kmod-nft-tproxy kmod-nft-socket \
