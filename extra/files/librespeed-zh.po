@@ -1,0 +1,373 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: luci-app-librespeed\n"
+"Language: zh_Hans\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+# ---- 菜单 ----
+msgid "LibreSpeed"
+msgstr "LibreSpeed 测速"
+
+msgid "Test"
+msgstr "测速"
+
+msgid "History"
+msgstr "历史"
+
+msgid "Settings"
+msgstr "设置"
+
+# ---- test.js ----
+msgid "Ping"
+msgstr "Ping"
+
+msgid "Download"
+msgstr "下载"
+
+msgid "Upload"
+msgstr "上传"
+
+msgid "Jitter"
+msgstr "抖动"
+
+msgid "last 24 hours"
+msgstr "最近 24 小时"
+
+msgid "Metric"
+msgstr "指标"
+
+msgid "Declining — the last measurement is %d%% below the 24-hour average."
+msgstr "正在下降 —— 最近一次测量低于 24 小时均值 %d%%。"
+
+msgid "Variable — ranged from %d to %d Mbps."
+msgstr "波动较大 —— 介于 %d 到 %d Mbps 之间。"
+
+msgid "Stable — averaged %d Mbps, ranging from %d to %d Mbps."
+msgstr "稳定 —— 均值 %d Mbps，范围 %d 到 %d Mbps。"
+
+msgid "No data in the last 24 hours."
+msgstr "最近 24 小时无数据。"
+
+msgid "View full history »"
+msgstr "查看完整历史 »"
+
+msgid "current"
+msgstr "当前"
+
+msgid "average"
+msgstr "平均"
+
+msgid "best"
+msgstr "最佳"
+
+msgid "worst"
+msgstr "最差"
+
+msgid "Could not start the measurement: %s"
+msgstr "无法开始测量：%s"
+
+msgid "Stop test"
+msgstr "停止测速"
+
+msgid "Start test"
+msgstr "开始测速"
+
+msgid "server %s"
+msgstr "服务器 %s"
+
+msgid "Last successful measurement"
+msgstr "最近一次成功测量"
+
+msgid "Connecting to the test server…"
+msgstr "正在连接测速服务器…"
+
+msgid "%s elapsed"
+msgstr "已进行 %s"
+
+msgid "The last measurement was stopped."
+msgstr "上次测量已手动停止。"
+
+msgid "Last measurement of %s failed"
+msgstr "%s 的上次测量失败"
+
+msgid "No measurement yet."
+msgstr "尚未进行过测量。"
+
+msgid "Server"
+msgstr "服务器"
+
+msgid "Interface"
+msgstr "接口"
+
+msgid "encrypted (HTTPS)"
+msgstr "加密（HTTPS）"
+
+msgid "plain HTTP"
+msgstr "明文（HTTP）"
+
+msgid "Protocol"
+msgstr "协议"
+
+msgid "Completed"
+msgstr "已完成"
+
+msgid "View result"
+msgstr "查看结果"
+
+msgid "Time"
+msgstr "时间"
+
+msgid "Download [Mbps]"
+msgstr "下载 [Mbps]"
+
+msgid "Upload [Mbps]"
+msgstr "上传 [Mbps]"
+
+msgid "Ping [ms]"
+msgstr "Ping [ms]"
+
+msgid "Jitter [ms]"
+msgstr "抖动 [ms]"
+
+msgid "automatic (nearest)"
+msgstr "自动（就近）"
+
+msgid "HTTPS (forced)"
+msgstr "强制 HTTPS"
+
+msgid "HTTP (forced)"
+msgstr "强制 HTTP"
+
+msgid "server default"
+msgstr "服务器默认"
+
+msgid "Unencrypted transfers, so the line is measured rather than the cipher."
+msgstr "明文传输，测得的是线路性能而非加密开销。"
+
+msgid "Encrypted transfers, which on hardware without AES acceleration may bound the result."
+msgstr "加密传输：无 AES 硬件加速的设备上，结果可能受加密开销限制。"
+
+msgid "Whichever scheme the server list provides."
+msgstr "由服务器列表提供的协议决定。"
+
+msgid "Schedule status"
+msgstr "计划状态"
+
+msgid "Recent history"
+msgstr "近期历史"
+
+msgid "Router speed test"
+msgstr "路由器测速"
+
+msgid "Measures the internet connection from this router."
+msgstr "测量本路由器的互联网连接速度。"
+
+# ---- history.js ----
+msgid "unknown"
+msgstr "未知"
+
+msgid "All"
+msgstr "全部"
+
+msgid "vs previous period"
+msgstr "对比上一周期"
+
+msgid "Hide this series"
+msgstr "隐藏此曲线"
+
+msgid "Show this series"
+msgstr "显示此曲线"
+
+msgid "avg"
+msgstr "均值"
+
+msgid "declining"
+msgstr "下降"
+
+msgid "highly variable"
+msgstr "波动很大"
+
+msgid "stable"
+msgstr "稳定"
+
+msgid "Stable over the selected period."
+msgstr "在所选时段内保持稳定。"
+
+msgid "History keeping is switched off, so measurements are not recorded."
+msgstr "历史记录已关闭，测量结果不会被保存。"
+
+msgid "Run a speed test to start building your connection history."
+msgstr "运行测速即可开始积累连接历史。"
+
+msgid "No measurements match the current filters."
+msgstr "没有符合当前筛选条件的记录。"
+
+msgid "Open settings"
+msgstr "打开设置"
+
+msgid "No data for the selected metric."
+msgstr "所选指标暂无数据。"
+
+msgid "Daily minimum, average and maximum."
+msgstr "每日最小值、均值与最大值。"
+
+msgid "These results name no interface: days archived before results were kept per interface, which mix all links."
+msgstr "这些结果未记录接口：按接口归档功能上线前的旧数据混合了所有链路。"
+
+msgid "Previous"
+msgstr "上一页"
+
+msgid "Page %d of %d"
+msgstr "第 %d / %d 页"
+
+msgid "Next"
+msgstr "下一页"
+
+msgid "Speed"
+msgstr "速度"
+
+msgid "Latency"
+msgstr "延迟"
+
+msgid "Series"
+msgstr "曲线"
+
+msgid "Range"
+msgstr "范围"
+
+msgid "No measurements yet"
+msgstr "暂无测量记录"
+
+msgid "Measurements"
+msgstr "测量记录"
+
+msgid "Export CSV"
+msgstr "导出 CSV"
+
+msgid "Export JSON"
+msgstr "导出 JSON"
+
+# ---- settings.js ----
+msgid "%s (recorded as %s)"
+msgstr "%s（记录为 %s）"
+
+msgid "%s (no gateway)"
+msgstr "%s（无网关）"
+
+msgid "%s (not found)"
+msgstr "%s（未找到）"
+
+msgid "LibreSpeed – Settings"
+msgstr "LibreSpeed – 设置"
+
+msgid "Measurement"
+msgstr "测量"
+
+msgid "Logical interface measured by default: by the Test page unless another one is chosen there, and by an automatic test that names no interface."
+msgstr "默认测量的逻辑接口：测速页未另行选择时使用此接口，未指定接口的自动测量亦然。"
+
+msgid "Server list URL"
+msgstr "服务器列表 URL"
+
+msgid "URL of a LibreSpeed server list in JSON, from a self-hosted deployment: either a static file such as https://example.org/servers.json or a generator such as https://example.org/backend/servers.php. Leave empty for the official list."
+msgstr "LibreSpeed 服务器列表的 JSON 地址（自建部署）：可以是静态文件（如 https://example.org/servers.json）或生成器（如 https://example.org/backend/servers.php）。留空则使用官方列表。"
+
+msgid "Must be an http(s) URL"
+msgstr "必须是 http(s) 开头的 URL"
+
+msgid "On routers without AES acceleration, TLS itself can bound the result — forcing plain HTTP then measures the line rather than the cipher."
+msgstr "无 AES 加速的路由器上，TLS 本身可能限制结果——强制明文 HTTP 可测量线路而非加密开销。"
+
+msgid "force HTTPS"
+msgstr "强制 HTTPS"
+
+msgid "force HTTP"
+msgstr "强制 HTTP"
+
+msgid "Scheduled measurements"
+msgstr "定时测量"
+
+msgid "Enable"
+msgstr "启用"
+
+msgid "Runs a measurement from cron at the chosen interval. Note that a measurement saturates the connection while it runs."
+msgstr "由 cron 按所选间隔执行测量。注意：测量期间会占满带宽。"
+
+msgid "Days"
+msgstr "星期"
+
+msgid "Leave empty to run every day. A weekly test runs on one of the chosen days, or on any day when none is chosen; the day is drawn once and kept while it stays among the chosen days."
+msgstr "留空则每天执行。每周测速在所选的某天运行；全不选则不限。抽取的结果会保留，只要其仍处于所选范围内。"
+
+msgid "Hours"
+msgstr "小时"
+
+msgid "An hour window on the 24-hour clock, such as 2-5 for 02:00–05:59. A daily or weekly measurement runs at a random time inside it, drawn when the schedule is applied; shorter intervals only run within it. Leave empty for any time. A window across midnight is not supported."
+msgstr "24 小时制的小时窗口，如 2-5 表示 02:00–05:59。每日/每周测量会在窗口内随机取时执行，更短间隔的测量也只在该窗口内运行。留空则不限时间。不支持跨午夜窗口。"
+
+msgid "Default interface"
+msgstr "默认接口"
+
+msgid "Choose the interface this test measures."
+msgstr "选择此测速使用的接口。"
+
+msgid "Another enabled automatic test already measures %s."
+msgstr "已有一个启用的自动测速任务在测量 %s。"
+
+msgid "Interval"
+msgstr "间隔"
+
+msgid "The interval %s is not supported. Use 1-59m, 1-23h, 1d or 7d."
+msgstr "不支持间隔 %s。可用 1-59m、1-23h、1d 或 7d。"
+
+msgid "Use an hour (0-23) or a range like 2-5"
+msgstr "请输入小时（0-23）或范围（如 2-5）"
+
+msgid "The window must not cross midnight"
+msgstr "时间窗口不能跨午夜"
+
+msgid "Keep history"
+msgstr "保留历史"
+
+msgid "Path"
+msgstr "路径"
+
+msgid "History stored in /tmp is lost when the router reboots."
+msgstr "保存在 /tmp 的历史会在路由器重启后丢失。"
+
+msgid "Retention"
+msgstr "保留时长"
+
+msgid "7 days"
+msgstr "7 天"
+
+msgid "30 days"
+msgstr "30 天"
+
+msgid "90 days"
+msgstr "90 天"
+
+msgid "1 year"
+msgstr "1 年"
+
+msgid "Archive path"
+msgstr "归档路径"
+
+msgid "Completed days are reduced to daily minimum, average and maximum and appended here once a day, so measurements since the last flush may be lost after an unexpected power loss. Leave empty to keep no persistent history."
+msgstr "已完成的日期会压缩为当日最小值/均值/最大值并每天归档一次，意外断电可能丢失上次归档后的明细。留空则不保留持久历史。"
+
+msgid "Archive retention"
+msgstr "归档保留时长"
+
+msgid "2 years"
+msgstr "2 年"
+
+msgid "Upcoming measurements"
+msgstr "即将进行的测量"
+
+msgid "The time of a daily measurement is drawn anew whenever the schedule is applied. A weekly measurement keeps its drawn day and time while they fit the chosen days and hours."
+msgstr "每次应用计划时会重新抽取每日测量的时间。每周测量在所选星期与小时范围内保留已抽取的日期和时间。"
+
+msgid "No schedule is active. Enable it above and apply to draw the measurement time."
+msgstr "当前没有启用的计划。在上方启用并应用以抽取测量时间。"

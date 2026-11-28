@@ -69,6 +69,24 @@ cat feeds.conf
 endg
 
 # ---------------------------------------------------------------
+# 2.4a) luci-app-librespeed 中文翻译注入
+#       上游（immortalwrt/luci feed）po 目录只有 templates，无 zh_Hans；
+#       这里按 view 源码 _() 字符串逐条注入简体中文 po，构建系统据此生成
+#       luci-i18n-librespeed-zh-cn 包（seed 显式 =y）。msgid 与上游 master
+#       test.js / history.js / settings.js 及 menu.d 逐字一致。
+# ---------------------------------------------------------------
+group "注入 luci-app-librespeed 简体中文翻译"
+LS_PO="$SRC/feeds/luci/applications/luci-app-librespeed/po/zh_Hans"
+[ -d "$SRC/feeds/luci/applications/luci-app-librespeed" ] || {
+  echo "::error::feeds/luci 中未找到 luci-app-librespeed"; exit 1; }
+mkdir -p "$LS_PO"
+cp "$REPO/extra/files/librespeed-zh.po" "$LS_PO/luci-app-librespeed.po"
+grep -q 'msgstr "开始测速"' "$LS_PO/luci-app-librespeed.po" || {
+  echo "::error::librespeed 中文 po 注入失败"; exit 1; }
+echo "luci-app-librespeed 简体中文翻译已注入（$(grep -c '^msgstr' "$LS_PO/luci-app-librespeed.po") 条）"
+endg
+
+# ---------------------------------------------------------------
 # 2.4) PassWall 内核开关确认（用户指定：固件内置 Xray 核心）
 #      PassWall（v1）的内核是 INCLUDE_* 开关（非 choice），aarch64 上
 #      SingBox/SS-Rust/Haproxy 等默认全开；内核裁剪由 seed-personal.config
@@ -587,7 +605,11 @@ uci -q set qbittorrent.config.enabled='0'
 uci -q set qbittorrent.config.download_dir='/mnt/Downloads'
 uci -q commit qbittorrent
 # aria2：启用；以 root 运行，避免 aria2 用户对 USB 盘无写权限；
-# 下载目录同样走 /mnt/Downloads 固定链接
+# 下载目录同样走 /mnt/Downloads 固定链接。
+# 注意：aria2 init 有硬校验 [ -d "$dir" ]，开机无盘时目录不存在会拒绝启动
+# （实测「默认开启但服务未运行」的根因）。开机先在 tmpfs 建好目录；
+# 插盘后 95-nas-autolink 会把该目录替换为指向盘上 Downloads 的链接。
+mkdir -p /mnt/Downloads 2>/dev/null
 uci -q set aria2.main.enabled='1'
 uci -q set aria2.main.user='root'
 uci -q set aria2.main.dir='/mnt/Downloads'
