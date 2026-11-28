@@ -94,6 +94,27 @@ cp "$REPO/extra/files/npu-zh.po" "$NPU_DIR/luci-app-airoha-npu/po/zh_Hans/luci-a
 grep -q 'msgstr "CPU 频率"' "$NPU_DIR/po/zh_Hans/luci-app-airoha-npu.po" || {
   echo "::error::npu 中文 po 注入失败"; exit 1; }
 echo "luci-app-airoha-npu 中文翻译已注入"
+
+# 2.5b) NPU 插件本地化补丁 + bug 修复（sed 补丁见 extra/files/npu-*.sed，与个人版同源）：
+#   JS：超频确认弹窗硬编码英文 → 中文；调频策略下拉框内核原文名 → 中文标签
+#   rpcd：set_overclock 非数字输入绕过校验（pcw=0 直写 PLL）堵死；
+#         governor/最大频率只写 policy0 → 遍历全部 cpufreq policy
+for JSF in "$NPU_DIR/htdocs/luci-static/resources/view/airoha_npu/status.js" \
+           "$NPU_DIR/luci-app-airoha-npu/htdocs/luci-static/resources/view/airoha_npu/status.js"; do
+  [ -f "$JSF" ] || { echo "::error::未找到 status.js: $JSF"; exit 1; }
+  sed -i -f "$REPO/extra/files/npu-status-js.sed" "$JSF"
+  grep -q 'govLabels\[g\]' "$JSF" || { echo "::error::NPU JS 调频策略中文补丁未生效（上游源码结构可能已变）: $JSF"; exit 1; }
+  grep -q '1400 MHz 以上为超频档' "$JSF" || { echo "::error::NPU JS 超频确认中文补丁未生效: $JSF"; exit 1; }
+done
+for RPCF in "$NPU_DIR/root/usr/libexec/rpcd/luci.airoha_npu" \
+            "$NPU_DIR/luci-app-airoha-npu/root/usr/libexec/rpcd/luci.airoha_npu"; do
+  [ -f "$RPCF" ] || { echo "::error::未找到 rpcd 后端: $RPCF"; exit 1; }
+  sed -i -f "$REPO/extra/files/npu-rpcd.sed" "$RPCF"
+  grep -q 'must be an integer' "$RPCF" || { echo "::error::NPU rpcd 整数校验补丁未生效: $RPCF"; exit 1; }
+  grep -q 'for pol in' "$RPCF" || { echo "::error::NPU rpcd 多 policy 补丁未生效: $RPCF"; exit 1; }
+  sh -n "$RPCF" || { echo "::error::NPU rpcd 补丁后语法错误: $RPCF"; exit 1; }
+done
+echo "NPU 插件补丁就绪（JS 中文化 ×2 + rpcd 校验/多policy ×2）"
 endg
 
 # ---------------------------------------------------------------

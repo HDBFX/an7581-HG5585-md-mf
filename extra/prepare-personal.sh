@@ -252,6 +252,28 @@ cp "$REPO/extra/files/npu-zh.po" "$NPU_DIR/luci-app-airoha-npu/po/zh_Hans/luci-a
 grep -q 'msgstr "CPU 频率"' "$NPU_DIR/po/zh_Hans/luci-app-airoha-npu.po" || {
   echo "::error::npu 中文 po 注入失败"; exit 1; }
 echo "luci-app-airoha-npu 中文翻译已注入"
+
+# 2.5b) NPU 插件本地化补丁 + bug 修复（sed 补丁见 extra/files/npu-*.sed）：
+#   JS：超频确认弹窗硬编码英文 → 中文（未走 _()，po 无效）；
+#       调频策略下拉框内核原文名（performance 等）→ 中文标签（value 不变）
+#   rpcd：set_overclock 非数字输入绕过校验 → pcw=0 直写 PLL 的 bug 堵死；
+#         governor/最大频率只写 policy0 → 遍历全部 cpufreq policy（多簇机型全核生效）
+for JSF in "$NPU_DIR/htdocs/luci-static/resources/view/airoha_npu/status.js" \
+           "$NPU_DIR/luci-app-airoha-npu/htdocs/luci-static/resources/view/airoha_npu/status.js"; do
+  [ -f "$JSF" ] || { echo "::error::未找到 status.js: $JSF"; exit 1; }
+  sed -i -f "$REPO/extra/files/npu-status-js.sed" "$JSF"
+  grep -q 'govLabels\[g\]' "$JSF" || { echo "::error::NPU JS 调频策略中文补丁未生效（上游源码结构可能已变）: $JSF"; exit 1; }
+  grep -q '1400 MHz 以上为超频档' "$JSF" || { echo "::error::NPU JS 超频确认中文补丁未生效: $JSF"; exit 1; }
+done
+for RPCF in "$NPU_DIR/root/usr/libexec/rpcd/luci.airoha_npu" \
+            "$NPU_DIR/luci-app-airoha-npu/root/usr/libexec/rpcd/luci.airoha_npu"; do
+  [ -f "$RPCF" ] || { echo "::error::未找到 rpcd 后端: $RPCF"; exit 1; }
+  sed -i -f "$REPO/extra/files/npu-rpcd.sed" "$RPCF"
+  grep -q 'must be an integer' "$RPCF" || { echo "::error::NPU rpcd 整数校验补丁未生效: $RPCF"; exit 1; }
+  grep -q 'for pol in' "$RPCF" || { echo "::error::NPU rpcd 多 policy 补丁未生效: $RPCF"; exit 1; }
+  sh -n "$RPCF" || { echo "::error::NPU rpcd 补丁后语法错误: $RPCF"; exit 1; }
+done
+echo "NPU 插件补丁就绪（JS 中文化 ×2 + rpcd 校验/多policy ×2）"
 endg
 
 # ---------------------------------------------------------------
@@ -604,13 +626,11 @@ cat > "$OVL/etc/uci-defaults/98-downloader" <<'DOWNLOADER'
 uci -q set qbittorrent.config.enabled='0'
 uci -q set qbittorrent.config.download_dir='/mnt/Downloads'
 uci -q commit qbittorrent
-# aria2：启用；以 root 运行，避免 aria2 用户对 USB 盘无写权限；
-# 下载目录同样走 /mnt/Downloads 固定链接。
-# 注意：aria2 init 有硬校验 [ -d "$dir" ]，开机无盘时目录不存在会拒绝启动
-# （实测「默认开启但服务未运行」的根因）。开机先在 tmpfs 建好目录；
-# 插盘后 95-nas-autolink 会把该目录替换为指向盘上 Downloads 的链接。
+# aria2：默认不自动启动（2026-11-28 用户要求，与 qBittorrent 保持一致）。
+# 下载目录与运行用户仍预配置好；目录开机先建好（init 硬校验），
+# 需要时在 LuCI「服务 → aria2」勾选启用即可。
 mkdir -p /mnt/Downloads 2>/dev/null
-uci -q set aria2.main.enabled='1'
+uci -q set aria2.main.enabled='0'
 uci -q set aria2.main.user='root'
 uci -q set aria2.main.dir='/mnt/Downloads'
 uci -q commit aria2

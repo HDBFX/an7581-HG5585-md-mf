@@ -231,3 +231,18 @@ msgstr "新流"
 
 msgid "Ethernet"
 msgstr "以太网"
+
+msgid "CPU set to "
+msgstr "CPU 已设置为 "
+
+msgid "Direct PLL. Stock max 1200 MHz. Stable up to 1500 MHz."
+msgstr "直写 PLL 锁频。出厂上限 1200 MHz，最高可尝试 1500 MHz（注意散热与稳定性）。"
+
+msgid "Error: "
+msgstr "错误："
+
+msgid "Failed: "
+msgstr "失败："
+
+msgid "Must be 500-1600 MHz"
+msgstr "频率必须为 500-1600 MHz"
